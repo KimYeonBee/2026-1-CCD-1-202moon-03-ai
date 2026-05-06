@@ -208,6 +208,73 @@ async def process_url_stream(req: UrlRequest):
     )
 
 
+# ── 파일 업로드 스트리밍 처리 (SSE) ───────────────────────────────────────────
+# 비디오 파일을 받아서 챕터 단위로 처리 완료 즉시 SSE 이벤트로 전달
+
+@app.post("/api/process/stream")
+async def process_file_stream(
+    file:       UploadFile = File(...),
+    language:   str        = Form("ko"),
+    stt_prompt: str        = Form(None),
+    refine:     bool       = Form(True),
+):
+    """
+    챕터별 스트리밍 처리 — SSE (Server-Sent Events)
+
+    이벤트 흐름:
+        1. init:          챕터 목록 + 전체 정보
+        2. chapter_ready: 챕터별 게임 데이터 (빈칸 자막 + 퀴즈)
+        3. complete:      처리 완료 + 통계
+    """
+    import json
+
+    # 파일 확장자 검사
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"지원하지 않는 파일 형식: '{suffix}'. 허용: {ALLOWED_EXTENSIONS}",
+        )
+
+    # 업로드 파일을 임시 폴더에 저장 (SSE generator가 끝날 때 정리)
+    tmp_dir   = tempfile.mkdtemp(prefix="tadac_upload_")
+    file_path = os.path.join(tmp_dir, f"input{suffix}")
+    content   = await file.read()
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    print(f"[TADAC] API /process/stream: {file.filename} ({len(content)/1024/1024:.1f} MB)")
+
+    def event_generator():
+        try:
+            for chunk in pipeline_module.run_pipeline_streaming(
+                source              = file_path,
+                language            = language,
+                blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+                fall_speed          = BASE_FALL_SPEED,
+                lead_time           = BASE_LEAD_TIME,
+                stt_prompt          = stt_prompt,
+                refine              = refine,
+            ):
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            error_event = {"type": "error", "message": str(e)}
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)  # 업로드 임시 파일 정리
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection":    "keep-alive",
+            "X-Accel-Buffering": "no",  # nginx 버퍼링 방지
+        },
+    )
+
+
 # ── 직접 실행 ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
