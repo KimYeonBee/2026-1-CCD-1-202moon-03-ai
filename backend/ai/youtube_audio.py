@@ -5,6 +5,7 @@ YouTube 오디오 추출 모듈 — yt-dlp로 영상에서 mp3 추출
 - 자막이 없는 YouTube 영상에서 오디오만 뽑아 Whisper STT로 넘기기 위해 사용
 """
 
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -30,8 +31,12 @@ def extract_audio(youtube_url, out_dir):
         "--audio-format", "mp3",       # mp3로 변환
         "--audio-quality", "0",        # 최고 품질
         "-o", out_template,
-        youtube_url,
     ]
+
+    if os.path.exists("cookies.txt"):
+        cmd.extend(["--cookies", "cookies.txt"])
+        
+    cmd.append(youtube_url)
 
     print(f"[TADAC] YouTube 오디오 추출 중: {youtube_url}")
     rc, stdout, stderr = _run(cmd)

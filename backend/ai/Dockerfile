@@ -2,7 +2,7 @@
 FROM python:3.11-slim
 
 # 2. 필수 시스템 도구 설치 (ffmpeg 등)
-RUN apt-get update && apt-get install -y ffmpeg curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ffmpeg curl nodejs && rm -rf /var/lib/apt/lists/*
 
 # 3. 서버 내 작업 폴더 설정
 WORKDIR /app
