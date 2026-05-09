@@ -7,6 +7,7 @@ YouTube 자막 모듈 — 자막 확인 → VTT 다운로드 → 파싱 → 단�
 - 결과 형태: Whisper transcribe()와 동일한 딕셔너리 구조
 """
 
+import os
 import re
 import subprocess
 import tempfile
@@ -25,7 +26,11 @@ def _run(cmd):
 
 def check_subtitles(youtube_url):
     print(f"[TADAC] 자막 확인 중: {youtube_url}")
-    rc, stdout, stderr = _run(["yt-dlp", "--no-playlist", "--list-subs", "--skip-download", youtube_url])
+    cmd = ["yt-dlp", "--no-playlist", "--list-subs", "--skip-download"]
+    if os.path.exists("cookies.txt"):
+        cmd.extend(["--cookies", "cookies.txt"])
+    cmd.append(youtube_url)
+    rc, stdout, stderr = _run(cmd)
 
     manual_langs  = []  # 사람이 직접 작성한 자막
     auto_langs    = []  # YouTube가 자동 생성한 자막
@@ -98,7 +103,6 @@ def download_vtt(youtube_url, out_dir, sub_info, preferred_lang="ko"):
             "--sub-format", "vtt",
             "--skip-download",
             "-o", str(Path(out_dir) / "subtitle"),
-            youtube_url,
         ]
     else:
         # 자동 생성 자막 사용
@@ -113,8 +117,12 @@ def download_vtt(youtube_url, out_dir, sub_info, preferred_lang="ko"):
             "--sub-format", "vtt",
             "--skip-download",
             "-o", str(Path(out_dir) / "subtitle"),
-            youtube_url,
         ]
+
+    if os.path.exists("cookies.txt"):
+        cmd.extend(["--cookies", "cookies.txt"])
+        
+    cmd.append(youtube_url)
 
     rc, stdout, stderr = _run(cmd)
     if rc != 0:
