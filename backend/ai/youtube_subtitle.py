@@ -26,7 +26,7 @@ def _run(cmd):
 
 def check_subtitles(youtube_url):
     print(f"[TADAC] 자막 확인 중: {youtube_url}")
-    cmd = ["yt-dlp", "--no-playlist", "--list-subs", "--skip-download"]
+    cmd = ["yt-dlp", "--js-runtimes", "node", "--no-playlist", "--list-subs", "--skip-download"]
     if os.path.exists("cookies.txt"):
         cmd.extend(["--cookies", "cookies.txt"])
     cmd.append(youtube_url)
@@ -97,6 +97,7 @@ def download_vtt(youtube_url, out_dir, sub_info, preferred_lang="ko"):
         print(f"[TADAC] 수동 자막 다운로드: 언어={lang}")
         cmd = [
             "yt-dlp",
+            "--js-runtimes", "node",
             "--no-playlist",
             "--write-subs",
             "--sub-lang",   lang,
@@ -111,6 +112,7 @@ def download_vtt(youtube_url, out_dir, sub_info, preferred_lang="ko"):
         print(f"[TADAC] 자동 생성 자막 다운로드: 언어={lang}")
         cmd = [
             "yt-dlp",
+            "--js-runtimes", "node",
             "--no-playlist",
             "--write-auto-subs",
             "--sub-lang",   lang,
