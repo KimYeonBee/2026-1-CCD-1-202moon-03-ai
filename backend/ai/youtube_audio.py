@@ -26,6 +26,7 @@ def extract_audio(youtube_url, out_dir):
 
     cmd = [
         "yt-dlp",
+        "--js-runtimes", "node",
         "--no-playlist",
         "-x",                          # 오디오만 추출
         "--audio-format", "mp3",       # mp3로 변환
