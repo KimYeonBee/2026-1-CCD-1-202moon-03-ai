@@ -2,7 +2,8 @@
 """
 YouTube 자막 모듈 — 자막 확인 → VTT 다운로드 → 파싱 → 단어 타임스탬프 보간
 
-- yt-dlp로 수동 자막 / 자동 생성 자막 확인 및 다운로드
+- youtube-transcript-api 우선 사용 (yt-dlp 봇 감지 우회)
+- 실패 시 yt-dlp로 폴백
 - VTT 파싱 후 단어별 타임스탬프 균등 분배 (선형 보간)
 - 결과 형태: Whisper transcribe()와 동일한 딕셔너리 구조
 """
@@ -14,12 +15,109 @@ import tempfile
 from pathlib import Path
 
 
+# ── youtube-transcript-api 라이브러리 (우선 사용) ─────────────────────────────
+# yt-dlp보다 가벼운 요청으로 봇 감지에 걸릴 확률이 낮음
+
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    HAS_YT_TRANSCRIPT_API = True
+except ImportError:
+    HAS_YT_TRANSCRIPT_API = False
+    print("[TADAC] youtube-transcript-api 미설치 → yt-dlp 전용 모드")
+
+
+# ── YouTube URL에서 video_id 추출 ─────────────────────────────────────────────
+
+def _extract_video_id(url):
+    """YouTube URL에서 video ID 추출"""
+    # https://youtu.be/VIDEO_ID
+    m = re.search(r"youtu\.be/([^?&]+)", url)
+    if m:
+        return m.group(1)
+    # https://www.youtube.com/watch?v=VIDEO_ID
+    m = re.search(r"[?&]v=([^&]+)", url)
+    if m:
+        return m.group(1)
+    # https://www.youtube.com/embed/VIDEO_ID
+    m = re.search(r"/embed/([^?&]+)", url)
+    if m:
+        return m.group(1)
+    return None
+
+
 # ── yt-dlp 명령어 실행 헬퍼 ──────────────────────────────────────────────────
 
 def _run(cmd):
     proc = subprocess.run(cmd, capture_output=True, text=True)
     return proc.returncode, proc.stdout, proc.stderr
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# youtube-transcript-api 변환 헬퍼
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _convert_api_result_to_transcript(raw_data):
+    """
+    youtube-transcript-api의 raw_data를 Whisper 결과와 동일한 구조로 변환.
+    
+    raw_data 형태: [{'text': '...', 'start': 0.0, 'duration': 1.54}, ...]
+    """
+    segments = []
+    all_words = []
+    
+    for i, entry in enumerate(raw_data):
+        text = entry.get("text", "").strip()
+        if not text:
+            continue
+        
+        start = entry.get("start", 0.0)
+        duration = entry.get("duration", 0.0)
+        end = start + duration
+        
+        # HTML 태그 제거 (자동 자막에 포함될 수 있음)
+        text = re.sub(r"<[^>]+>", "", text).strip()
+        if not text:
+            continue
+        
+        # 줄바꿈을 공백으로 치환
+        text = text.replace("\n", " ").strip()
+        
+        # 단어 타임스탬프 보간
+        words = _interpolate_words(text, start, end)
+        all_words.extend(words)
+        
+        segments.append({
+            "id": i,
+            "start": round(start, 3),
+            "end": round(end, 3),
+            "text": text,
+        })
+    
+    # 중복 세그먼트 제거 (자동 자막에서 발생 가능)
+    deduplicated = []
+    for seg in segments:
+        if deduplicated and deduplicated[-1]["text"] == seg["text"]:
+            continue
+        deduplicated.append(seg)
+    
+    # ID 재할당
+    for i, seg in enumerate(deduplicated):
+        seg["id"] = i
+    
+    full_text = " ".join(seg["text"] for seg in deduplicated)
+    
+    return {
+        "text": full_text,
+        "words": all_words,
+        "segments": deduplicated,
+        "language": "ko",
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 방법 2: yt-dlp (폴백)
+# ══════════════════════════════════════════════════════════════════════════════
 
 # ── 자막 존재 여부 확인 ───────────────────────────────────────────────────────
 # yt-dlp --list-subs 결과를 파싱해서 수동/자동 자막 언어 목록 반환
@@ -257,20 +355,100 @@ def parse_vtt(vtt_path):
     }
 
 
-# ── 메인 함수 ─────────────────────────────────────────────────────────────────
-# 자막 확인 → 다운로드 → 파싱 한 번에 처리
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 메인 함수 — youtube-transcript-api 우선 → yt-dlp 폴백
+# ══════════════════════════════════════════════════════════════════════════════
 
 def get_transcript_from_youtube(youtube_url, preferred_lang="ko"):
-    sub_info = check_subtitles(youtube_url)
+    """
+    YouTube 수동 자막 추출 메인 함수.
+    
+    ⚠ 자동 자막은 품질이 떨어지므로 직접 사용하지 않음.
+    자동 자막만 있거나 자막이 없으면 빈 transcript를 반환 → pipeline에서 Whisper STT로 전환.
+    
+    우선순위:
+        1. youtube-transcript-api로 수동 자막 (봇 감지 우회에 유리)
+        2. yt-dlp로 수동 자막 (폴백)
+        3. 수동 자막 없으면 → 빈 결과 반환 (pipeline이 오디오 추출 → Whisper)
+    
+    Returns:
+        (transcript_dict, source_type)
+        - transcript_dict: Whisper 결과와 동일한 구조 (수동 자막만)
+        - source_type: "youtube_manual" / "youtube_auto" / "no_subtitle"
+          ※ "youtube_auto"/"no_subtitle" 일 때 transcript_dict는 빈 딕셔너리
+    """
+    
+    # ── 1차 시도: youtube-transcript-api (수동 자막만) ─────────────────────────
+    print("[TADAC] 자막 추출 1차 시도: youtube-transcript-api")
+    transcript, source_type = _get_manual_transcript_via_api(youtube_url, preferred_lang)
+    
+    if transcript and transcript.get("segments"):
+        print(f"[TADAC] ✅ youtube-transcript-api 수동 자막 성공")
+        return transcript, "youtube_manual"
+    
+    # ── 2차 시도: yt-dlp (수동 자막만) ────────────────────────────────────────
+    print("[TADAC] youtube-transcript-api 수동 자막 없음 → 2차 시도: yt-dlp")
+    try:
+        transcript, source_type = _get_manual_transcript_via_ytdlp(youtube_url, preferred_lang)
+        if transcript and transcript.get("segments"):
+            print(f"[TADAC] ✅ yt-dlp 수동 자막 성공")
+            return transcript, "youtube_manual"
+    except Exception as e:
+        print(f"[TADAC] yt-dlp 수동 자막도 실패: {e}")
+    
+    # ── 수동 자막 없음 → pipeline이 오디오 추출 → Whisper STT ────────────────
+    print("[TADAC] ❌ 수동 자막 없음 → 오디오 추출 후 Whisper STT 필요")
+    return {}, "no_subtitle"
 
-    # 자막이 전혀 없으면 Whisper로 넘김
-    if not sub_info["has_manual"] and not sub_info["has_auto"]:
-        print("[TADAC] 자막 없음 → Whisper STT로 전환")
+
+def _get_manual_transcript_via_api(youtube_url, preferred_lang="ko"):
+    """youtube-transcript-api로 수동 자막만 가져오기"""
+    if not HAS_YT_TRANSCRIPT_API:
+        return None, None
+    
+    video_id = _extract_video_id(youtube_url)
+    if not video_id:
+        return None, None
+    
+    try:
+        ytt_api = YouTubeTranscriptApi()
+        transcript_list = ytt_api.list(video_id)
+        
+        # 수동 자막만 시도
+        try:
+            transcript = transcript_list.find_manually_created_transcript([preferred_lang, 'ko', 'en'])
+            fetched = transcript.fetch()
+            raw_data = fetched.to_raw_data()
+            transcript_dict = _convert_api_result_to_transcript(raw_data)
+            print(f"[TADAC] youtube-transcript-api: 수동 자막 발견 (언어={transcript.language_code})")
+            return transcript_dict, "youtube_manual"
+        except Exception:
+            print("[TADAC] youtube-transcript-api: 수동 자막 없음")
+            return None, None
+            
+    except Exception as e:
+        print(f"[TADAC] youtube-transcript-api 실패: {e}")
+        return None, None
+
+
+def _get_manual_transcript_via_ytdlp(youtube_url, preferred_lang="ko"):
+    """yt-dlp로 수동 자막만 가져오기"""
+    try:
+        sub_info = check_subtitles(youtube_url)
+    except Exception as e:
+        print(f"[TADAC] yt-dlp 자막 확인 실패: {e}")
         return {}, "no_subtitle"
 
-    # 임시 폴더에 VTT 다운로드 후 파싱 (완료 후 자동 삭제)
+    # 수동 자막이 없으면 빈 결과 반환
+    if not sub_info["has_manual"]:
+        print("[TADAC] yt-dlp: 수동 자막 없음")
+        return {}, "no_subtitle"
+
+    # 수동 자막만 다운로드
     with tempfile.TemporaryDirectory(prefix="tadac_vtt_") as tmp_dir:
         vtt_path, source_type = download_vtt(youtube_url, tmp_dir, sub_info, preferred_lang)
         transcript = parse_vtt(vtt_path)
 
     return transcript, source_type
+
