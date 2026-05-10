@@ -164,7 +164,7 @@ def generate_quizzes(segments, chapters=None, questions_per_chapter=QUESTIONS_PE
             print(f"  Q{quiz_id_counter+1}: {q.get('question', '')[:50]}...")
 
             quizzes.append({
-                "quiz_id":       quiz_id_counter,
+                "ai_quiz_index": quiz_id_counter,
                 "chapter_index": ch_idx,
                 "chapter_title": chapter["title"],
                 "trigger_time":  round(trigger_time, 3),

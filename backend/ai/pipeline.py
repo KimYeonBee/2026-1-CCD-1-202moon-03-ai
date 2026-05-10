@@ -501,7 +501,7 @@ def run_pipeline(
                 seg_id_end = last_seg.get("id", 0)
 
                 for q in ch_quizzes:
-                    q["quiz_id"] = len(all_quizzes) + ch_quizzes.index(q)
+                    q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
                     q["chapter_title"] = chapter["title"]
                     q["trigger_time"] = round(trigger_time, 3)
@@ -526,7 +526,7 @@ def run_pipeline(
                     ch_segs, chapters=[chapter]
                 )
                 for q in ch_quizzes:
-                    q["quiz_id"] = len(all_quizzes) + ch_quizzes.index(q)
+                    q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
                 
                 all_quizzes.extend(ch_quizzes)
@@ -763,7 +763,7 @@ def run_pipeline_streaming(
                 seg_id_end = last_seg.get("id", 0)
 
                 for q in ch_quizzes:
-                    q["quiz_id"] = len(all_quizzes) + ch_quizzes.index(q)
+                    q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
                     q["chapter_title"] = chapter["title"]
                     q["trigger_time"] = round(trigger_time, 3)
@@ -781,7 +781,7 @@ def run_pipeline_streaming(
                 
                 ch_quizzes = quiz_generator.generate_quizzes(ch_segs, chapters=[chapter])
                 for q in ch_quizzes:
-                    q["quiz_id"] = len(all_quizzes) + ch_quizzes.index(q)
+                    q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
 
             total_enriched_segments.extend(ch_enriched)
