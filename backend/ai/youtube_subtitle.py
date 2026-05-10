@@ -15,6 +15,16 @@ import tempfile
 from pathlib import Path
 
 
+# ── 쿠키 파일 경로 ───────────────────────────────────────────────────────
+COOKIES_PATH = "/app/cookies.txt"
+
+def _get_cookie_args():
+    """yt-dlp 쿠키 인자 반환 (파일 없으면 빈 리스트)"""
+    if os.path.exists(COOKIES_PATH):
+        return ["--cookies", COOKIES_PATH]
+    return []
+
+
 # ── youtube-transcript-api 라이브러리 (우선 사용) ─────────────────────────────
 # yt-dlp보다 가벼운 요청으로 봇 감지에 걸릴 확률이 낮음
 
@@ -124,8 +134,9 @@ def _convert_api_result_to_transcript(raw_data):
 
 def check_subtitles(youtube_url):
     print(f"[TADAC] 자막 확인 중: {youtube_url}")
-    cmd = ["yt-dlp", "--js-runtimes", "node", "--no-playlist", "--list-subs", "--skip-download"]
-    cmd.extend(["--extractor-args", "youtube:player_client=android"])
+    cmd = ["yt-dlp", "--no-playlist", "--list-subs", "--skip-download"]
+    cmd.extend(_get_cookie_args())
+    cmd.extend(["--extractor-args", "youtube:player_client=web,default"])
     cmd.append(youtube_url)
     rc, stdout, stderr = _run(cmd)
 
@@ -218,7 +229,8 @@ def download_vtt(youtube_url, out_dir, sub_info, preferred_lang="ko"):
             "-o", str(Path(out_dir) / "subtitle"),
         ]
 
-    cmd.extend(["--extractor-args", "youtube:player_client=android"])
+    cmd.extend(_get_cookie_args())
+    cmd.extend(["--extractor-args", "youtube:player_client=web,default"])
         
     cmd.append(youtube_url)
 
@@ -412,6 +424,8 @@ def _get_manual_transcript_via_api(youtube_url, preferred_lang="ko"):
         return None, None
     
     try:
+        # 쿠키 파일이 있으면 인증에 사용
+        cookie_path = COOKIES_PATH if os.path.exists(COOKIES_PATH) else None
         ytt_api = YouTubeTranscriptApi()
         transcript_list = ytt_api.list(video_id)
         

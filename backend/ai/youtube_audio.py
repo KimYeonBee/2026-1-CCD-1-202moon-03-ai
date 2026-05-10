@@ -4,6 +4,7 @@ YouTube 오디오 추출 모듈 — yt-dlp + pytubefix 이중 폴백
 
 - 자막이 없는 YouTube 영상에서 오디오만 뽑아 Whisper STT로 넘기기 위해 사용
 - yt-dlp 우선 시도 → 봇 감지 실패 시 pytubefix로 폴백
+- 쿠키 파일: /app/cookies.txt (Docker 볼륨 마운트로 주입)
 """
 
 import os
@@ -19,6 +20,20 @@ try:
 except ImportError:
     HAS_PYTUBEFIX = False
     print("[TADAC] pytubefix 미설치 → yt-dlp 전용 모드")
+
+
+# ── 쿠키 파일 경로 ────────────────────────────────────────────────────────────
+# Docker 볼륨 마운트: docker run -v ~/cookies.txt:/app/cookies.txt
+COOKIES_PATH = "/app/cookies.txt"
+
+
+def _get_cookie_args():
+    """쿠키 파일이 있으면 --cookies 인자 반환, 없으면 빈 리스트"""
+    if os.path.exists(COOKIES_PATH):
+        print(f"[TADAC] 쿠키 파일 사용: {COOKIES_PATH}")
+        return ["--cookies", COOKIES_PATH]
+    print("[TADAC] 쿠키 파일 없음 (봇 감지 우회 불가)")
+    return []
 
 
 # ── yt-dlp 명령어 실행 헬퍼 ──────────────────────────────────────────────────
@@ -38,7 +53,6 @@ def _extract_audio_ytdlp(youtube_url, out_dir):
 
     cmd = [
         "yt-dlp",
-        "--js-runtimes", "node",
         "--no-playlist",
         "-x",                          # 오디오만 추출
         "--audio-format", "mp3",       # mp3로 변환
@@ -46,7 +60,8 @@ def _extract_audio_ytdlp(youtube_url, out_dir):
         "-o", out_template,
     ]
 
-    cmd.extend(["--extractor-args", "youtube:player_client=android"])
+    cmd.extend(_get_cookie_args())
+    cmd.extend(["--extractor-args", "youtube:player_client=web,default"])
     cmd.append(youtube_url)
 
     print(f"[TADAC] [yt-dlp] YouTube 오디오 추출 중: {youtube_url}")
@@ -77,18 +92,13 @@ def _extract_audio_pytubefix(youtube_url, out_dir):
     print(f"[TADAC] [pytubefix] YouTube 오디오 추출 중: {youtube_url}")
 
     try:
-        yt = PytubeYouTube(youtube_url, use_po_token=True)
-    except Exception:
-        # use_po_token 실패 시 일반 모드로 재시도
-        try:
-            yt = PytubeYouTube(youtube_url)
-        except Exception as e:
-            raise RuntimeError(f"pytubefix YouTube 객체 생성 실패: {e}")
+        yt = PytubeYouTube(youtube_url)
+    except Exception as e:
+        raise RuntimeError(f"pytubefix YouTube 객체 생성 실패: {e}")
 
     # 오디오 전용 스트림 가져오기
     audio_stream = yt.streams.get_audio_only()
     if not audio_stream:
-        # 오디오 전용 없으면 가장 낮은 해상도 비디오라도 가져오기
         audio_stream = yt.streams.filter(only_audio=True).first()
 
     if not audio_stream:
@@ -106,11 +116,9 @@ def _extract_audio_pytubefix(youtube_url, out_dir):
     ret = os.system(f'ffmpeg -y -i "{downloaded_path}" -vn -acodec mp3 -q:a 0 "{mp3_path}" -loglevel quiet')
 
     if ret != 0 or not os.path.exists(mp3_path):
-        # ffmpeg 변환 실패 시 원본 그대로 사용
         print(f"[TADAC] [pytubefix] mp3 변환 실패 → 원본 파일 사용")
         return downloaded_path
 
-    # 원본 파일 삭제
     try:
         os.remove(downloaded_path)
     except Exception:
@@ -127,9 +135,9 @@ def _extract_audio_pytubefix(youtube_url, out_dir):
 def extract_audio(youtube_url, out_dir):
     """
     YouTube 오디오 추출 (이중 폴백).
-    
+
     우선순위:
-        1. yt-dlp (가장 안정적)
+        1. yt-dlp + 쿠키 (가장 안정적)
         2. pytubefix (yt-dlp 봇 감지 시 폴백)
     """
     errors = []
@@ -155,14 +163,12 @@ def extract_audio(youtube_url, out_dir):
     error_detail = "\n".join(errors)
     raise RuntimeError(
         f"YouTube 오디오 추출 실패 (모든 방법 시도 완료):\n{error_detail}\n\n"
-        f"💡 해결 방법:\n"
-        f"1. pip install --upgrade yt-dlp pytubefix\n"
-        f"2. 서버 IP가 YouTube에 의해 차단된 경우 프록시 사용 필요"
+        f"💡 해결 방법: 쿠키 파일을 /app/cookies.txt 에 마운트하세요\n"
+        f"   docker run -v ~/cookies.txt:/app/cookies.txt -p 8001:8001 tadac-ai"
     )
 
 
 # ── 임시 폴더와 함께 추출 ────────────────────────────────────────────────────
-# 호출자가 직접 tmp_dir을 관리하고 싶을 때 사용
 
 def extract_audio_temp(youtube_url):
     tmp_dir    = tempfile.mkdtemp(prefix="tadac_audio_")
