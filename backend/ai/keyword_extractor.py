@@ -131,19 +131,16 @@ def _find_word_timestamp(keyword, words):
 
 
 def _find_word_in_segment(keyword, segment, all_words):
-    # 해당 세그먼트 시간 범위 안의 단어만 먼저 탐색
+    # 해당 세그먼트 시간 범위 안의 단어만 탐색
+    # ⚠️ 전체 all_words 폴백 제거 — 키워드가 여러 번 등장할 때
+    #    다른 세그먼트의 시간이 매핑되는 버그 방지
+    #    (못 찾으면 None → 호출 측에서 세그먼트 중간 시점을 폴백으로 사용)
     seg_words = [
         w for w in all_words
         if w["start"] >= segment["start"] - 0.1
         and w["end"]   <= segment["end"]   + 0.1
     ]
-    result = _find_word_timestamp(keyword, seg_words)
-
-    if result:
-        return result
-
-    # 세그먼트 안에 없으면 전체 단어 목록에서 재탐색
-    return _find_word_timestamp(keyword, all_words)
+    return _find_word_timestamp(keyword, seg_words)
 
 
 # ── 메인 함수 ─────────────────────────────────────────────────────────────────
