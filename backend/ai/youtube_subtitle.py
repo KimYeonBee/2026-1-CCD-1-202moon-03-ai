@@ -27,8 +27,9 @@ def _run(cmd):
 def check_subtitles(youtube_url):
     print(f"[TADAC] 자막 확인 중: {youtube_url}")
     cmd = ["yt-dlp", "--js-runtimes", "node", "--no-playlist", "--list-subs", "--skip-download"]
-    if os.path.exists("cookies.txt"):
-        cmd.extend(["--cookies", "cookies.txt"])
+    cookie_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    if os.path.exists(cookie_path):
+        cmd.extend(["--cookies", cookie_path])
     cmd.append(youtube_url)
     rc, stdout, stderr = _run(cmd)
 
@@ -121,8 +122,9 @@ def download_vtt(youtube_url, out_dir, sub_info, preferred_lang="ko"):
             "-o", str(Path(out_dir) / "subtitle"),
         ]
 
-    if os.path.exists("cookies.txt"):
-        cmd.extend(["--cookies", "cookies.txt"])
+    cookie_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    if os.path.exists(cookie_path):
+        cmd.extend(["--cookies", cookie_path])
         
     cmd.append(youtube_url)
 

@@ -34,8 +34,9 @@ def extract_audio(youtube_url, out_dir):
         "-o", out_template,
     ]
 
-    if os.path.exists("cookies.txt"):
-        cmd.extend(["--cookies", "cookies.txt"])
+    cookie_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    if os.path.exists(cookie_path):
+        cmd.extend(["--cookies", cookie_path])
         
     cmd.append(youtube_url)
 
