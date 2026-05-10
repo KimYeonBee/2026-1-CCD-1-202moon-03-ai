@@ -34,7 +34,7 @@ def extract_audio(youtube_url, out_dir):
         "-o", out_template,
     ]
 
-    cmd.extend(["--username", "oauth2", "--password", ""])
+    cmd.extend(["--extractor-args", "youtube:player_client=android"])
         
     cmd.append(youtube_url)
 

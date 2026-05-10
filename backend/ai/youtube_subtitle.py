@@ -27,7 +27,7 @@ def _run(cmd):
 def check_subtitles(youtube_url):
     print(f"[TADAC] 자막 확인 중: {youtube_url}")
     cmd = ["yt-dlp", "--js-runtimes", "node", "--no-playlist", "--list-subs", "--skip-download"]
-    cmd.extend(["--username", "oauth2", "--password", ""])
+    cmd.extend(["--extractor-args", "youtube:player_client=android"])
     cmd.append(youtube_url)
     rc, stdout, stderr = _run(cmd)
 
@@ -120,7 +120,7 @@ def download_vtt(youtube_url, out_dir, sub_info, preferred_lang="ko"):
             "-o", str(Path(out_dir) / "subtitle"),
         ]
 
-    cmd.extend(["--username", "oauth2", "--password", ""])
+    cmd.extend(["--extractor-args", "youtube:player_client=android"])
         
     cmd.append(youtube_url)
 

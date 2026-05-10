@@ -64,11 +64,12 @@ def _get_youtube_metadata(youtube_url):
     title = None
     description = None
 
-    oauth_args = ["--username", "oauth2", "--password", ""]
+    # OAuth2가 더 이상 지원되지 않으므로, 모바일 클라이언트로 위장하여 봇 우회
+    bypass_args = ["--extractor-args", "youtube:player_client=android"]
 
     try:
         # 제목 추출
-        cmd = ["yt-dlp", "--no-playlist", "--get-title", "--skip-download"] + oauth_args + [youtube_url]
+        cmd = ["yt-dlp", "--no-playlist", "--get-title", "--skip-download"] + bypass_args + [youtube_url]
         proc = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=15,
@@ -81,7 +82,7 @@ def _get_youtube_metadata(youtube_url):
 
     try:
         # 설명 추출
-        cmd = ["yt-dlp", "--no-playlist", "--get-description", "--skip-download"] + oauth_args + [youtube_url]
+        cmd = ["yt-dlp", "--no-playlist", "--get-description", "--skip-download"] + bypass_args + [youtube_url]
         proc = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=15,
