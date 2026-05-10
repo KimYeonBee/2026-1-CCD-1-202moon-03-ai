@@ -64,10 +64,14 @@ def _get_youtube_metadata(youtube_url):
     title = None
     description = None
 
+    cookie_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    cookie_args = ["--cookies", cookie_path] if os.path.exists(cookie_path) else []
+
     try:
         # 제목 추출
+        cmd = ["yt-dlp", "--no-playlist", "--get-title", "--skip-download"] + cookie_args + [youtube_url]
         proc = subprocess.run(
-            ["yt-dlp", "--no-playlist", "--get-title", "--skip-download", youtube_url],
+            cmd,
             capture_output=True, text=True, timeout=15,
         )
         if proc.returncode == 0 and proc.stdout.strip():
@@ -78,8 +82,9 @@ def _get_youtube_metadata(youtube_url):
 
     try:
         # 설명 추출
+        cmd = ["yt-dlp", "--no-playlist", "--get-description", "--skip-download"] + cookie_args + [youtube_url]
         proc = subprocess.run(
-            ["yt-dlp", "--no-playlist", "--get-description", "--skip-download", youtube_url],
+            cmd,
             capture_output=True, text=True, timeout=15,
         )
         if proc.returncode == 0 and proc.stdout.strip():
