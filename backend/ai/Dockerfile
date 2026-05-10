@@ -9,7 +9,8 @@ WORKDIR /app
 
 # 4. 라이브러리 목록 복사 및 설치
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --upgrade yt-dlp
 
 # 5. 내 코드 전체 복사
 COPY . .

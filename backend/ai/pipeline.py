@@ -19,7 +19,7 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
+
 import sys
 import tempfile
 from pathlib import Path
@@ -54,46 +54,6 @@ BASE_LEAD_TIME          = 3.0  # 프론트가 target_time 기준으로 재계산
 
 def _is_youtube_url(src):
     return any(src.startswith(p) for p in YOUTUBE_PREFIXES)
-
-
-# ── YouTube 영상 제목+설명 추출 ───────────────────────────────────────────────
-# yt-dlp로 영상 메타데이터에서 제목과 설명을 가져오기
-
-def _get_youtube_metadata(youtube_url):
-    """YouTube 영상 제목 + 설명 추출"""
-    title = None
-    description = None
-
-    # OAuth2가 더 이상 지원되지 않으므로, 모바일 클라이언트로 위장하여 봇 우회
-    bypass_args = ["--extractor-args", "youtube:player_client=android"]
-
-    try:
-        # 제목 추출
-        cmd = ["yt-dlp", "--no-playlist", "--get-title", "--skip-download"] + bypass_args + [youtube_url]
-        proc = subprocess.run(
-            cmd,
-            capture_output=True, text=True, timeout=15,
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            title = proc.stdout.strip()
-            print(f"[TADAC] 영상 제목: {title}")
-    except Exception as e:
-        print(f"[TADAC] 제목 추출 실패: {e}")
-
-    try:
-        # 설명 추출
-        cmd = ["yt-dlp", "--no-playlist", "--get-description", "--skip-download"] + bypass_args + [youtube_url]
-        proc = subprocess.run(
-            cmd,
-            capture_output=True, text=True, timeout=15,
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            description = proc.stdout.strip()
-            print(f"[TADAC] 영상 설명: {description[:100]}...")
-    except Exception as e:
-        print(f"[TADAC] 설명 추출 실패: {e}")
-
-    return title, description
 
 
 
@@ -370,27 +330,15 @@ def run_pipeline(
         if _is_youtube_url(source):
             print(f"[TADAC] 입력: YouTube URL")
 
-            # 영상 메타데이터 추출 (제목 + 설명)
-            content_title, description = _get_youtube_metadata(source)
+            # YouTube 수동 자막 추출 시도 (자동 자막은 품질 이슈로 사용 안 함)
+            transcript, transcript_source = youtube_subtitle.get_transcript_from_youtube(
+                source, preferred_lang=language
+            )
 
-            # YouTube 자막 확인
-            sub_info = youtube_subtitle.check_subtitles(source)
-
-            if sub_info["has_manual"]:
-                # ✅ 수동 자막 있음 → 그대로 사용 (품질 좋음)
-                print("[TADAC] 수동 자막 사용")
-                transcript, transcript_source = youtube_subtitle.get_transcript_from_youtube(
-                    source, preferred_lang=language
-                )
-
-            else:
-                # ⚠ 자동 자막만 or 자막 없음 → Whisper STT
-                if sub_info["has_auto"]:
-                    print("[TADAC] 자동 자막만 있음 → 품질 이슈로 Whisper STT 전환")
-                else:
-                    print("[TADAC] 자막 없음 → Whisper STT로 전환")
-
-
+            if not transcript.get("segments"):
+                # 수동 자막 없음 → 오디오 추출 → Whisper STT
+                # (자동 자막은 품질이 심각하게 떨어지므로 반드시 Whisper 사용)
+                print("[TADAC] 수동 자막 없음 → 오디오 추출 후 Whisper STT로 전환")
                 tmp_dir = tempfile.mkdtemp(prefix="tadac_yt_audio_")
                 tmp_dirs.append(tmp_dir)
                 audio_path        = youtube_audio.extract_audio(source, tmp_dir)
@@ -568,7 +516,6 @@ def run_pipeline(
         # 파이프라인 메타데이터 추가
         game_data["stats"] = {
             "transcript_source": transcript_source,  # "whisper" / "youtube_manual"
-            "content_title":     content_title,
             "total_words":       len(transcript.get("words", [])),
             "language":          language,
             "gpt_refined":       (transcript_source == "whisper" and refine),
@@ -636,21 +583,15 @@ def run_pipeline_streaming(
 
         if _is_youtube_url(source):
             print(f"[TADAC] [스트리밍] 입력: YouTube URL")
-            content_title, description = _get_youtube_metadata(source)
 
-            sub_info = youtube_subtitle.check_subtitles(source)
+            # YouTube 수동 자막 추출 시도 (자동 자막은 품질 이슈로 사용 안 함)
+            transcript, transcript_source = youtube_subtitle.get_transcript_from_youtube(
+                source, preferred_lang=language
+            )
 
-            if sub_info["has_manual"]:
-                print("[TADAC] 수동 자막 사용")
-                transcript, transcript_source = youtube_subtitle.get_transcript_from_youtube(
-                    source, preferred_lang=language
-                )
-            else:
-                if sub_info["has_auto"]:
-                    print("[TADAC] 자동 자막만 있음 → Whisper STT 전환")
-                else:
-                    print("[TADAC] 자막 없음 → Whisper STT 전환")
-
+            if not transcript.get("segments"):
+                # 수동 자막 없음 → 오디오 추출 → Whisper STT
+                print("[TADAC] [스트리밍] 수동 자막 없음 → 오디오 추출 후 Whisper STT로 전환")
                 tmp_dir = tempfile.mkdtemp(prefix="tadac_yt_audio_")
                 tmp_dirs.append(tmp_dir)
                 audio_path        = youtube_audio.extract_audio(source, tmp_dir)
@@ -729,7 +670,6 @@ def run_pipeline_streaming(
         # ── init 이벤트: 챕터 목록 전달 ───────────────────────────────────────
         yield {
             "type":           "init",
-            "content_title":  content_title,
             "total_duration": round(total_duration, 3),
             "chapters":       chapters,
         }
@@ -816,7 +756,6 @@ def run_pipeline_streaming(
             "type":  "complete",
             "stats": {
                 "transcript_source": transcript_source,
-                "content_title":     content_title,
                 "total_words":       len(transcript.get("words", [])),
                 "language":          language,
                 "gpt_refined":       (transcript_source == "whisper" and refine),
