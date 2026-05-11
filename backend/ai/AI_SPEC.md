@@ -118,6 +118,7 @@ curl -X POST http://localhost:8000/api/process \
 
 ```json
 {
+  "ai_summary": "이 강의는 ADHD의 신경생리학적 기제를 다룬다.\n\n## 챕터 1 제목\n- 핵심 개념 1\n- 핵심 개념 2\n\n## 챕터 2 제목\n핵심 내용을 정리한 3~6문장 분량의 복습 노트.",
   "subtitles": [
     {
       "segment_id": 0,
@@ -172,6 +173,15 @@ curl -X POST http://localhost:8000/api/process \
 ```
 
 ### Response Body 필드 설명
+
+**`ai_summary`** — 영상 복습용 마크다운 요약 (string)
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `ai_summary` | string | 강의 전체 한 줄 주제 + 챕터별 복습 요약을 마크다운으로 합친 문자열. 챕터 헤더는 `## {챕터 제목}` 형식. 챕터 요약은 챕터당 3~6문장 또는 3~5개 불릿. `refine=false` 또는 수동 자막 경로에서는 한 줄 주제만 들어감. 영상 길이/내용에 따라 비어 있을 수 있음(`""`). |
+
+> 프론트엔드는 학습 완료 후 "복습 노트" 패널에 그대로 렌더링하면 됨.
+> 백엔드는 그대로 DB에 저장 권장 (재생성 비용이 비쌈).
 
 **`subtitles[]`** — 자막 세그먼트 목록
 
@@ -335,6 +345,7 @@ curl -X POST http://localhost:8000/api/process \
 
 ```json
 {
+  "ai_summary": "이 강의는 한국사 선사~삼국시대 흐름을 정리한다.\n\n## 구석기 시대\n이동 생활, 사냥·채집, 뗀석기 사용 등 핵심 특징.\n\n## 신석기 시대\n정착·농경 시작, 빗살무늬토기, 간석기 사용.",
   "subtitles": [
     {
       "segment_id": 0,

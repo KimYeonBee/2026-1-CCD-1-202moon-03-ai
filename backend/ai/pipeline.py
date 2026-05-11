@@ -292,6 +292,22 @@ def _build_corrected_subtitle_data(enriched_segments):
     }
 
 
+def _compose_ai_summary(topic_summary, chapter_summaries):
+    """
+    챕터별 요약을 마크다운 복습 노트로 합친다.
+
+    - chapter_summaries 가 있으면: topic_summary 한 줄 + 챕터별 ## 헤더 블록.
+    - 없으면(refine=false / 수동 자막 / GPT가 빈 값을 줌): topic_summary 한 줄만.
+    - 둘 다 없으면 빈 문자열.
+    """
+    parts = []
+    if topic_summary:
+        parts.append(topic_summary.strip())
+    for title, body in chapter_summaries:
+        parts.append(f"## {title}\n{body.strip()}")
+    return "\n\n".join(parts)
+
+
 def _branch_output_paths(output_path):
     """CLI -o 경로를 기준으로 두 브랜치 JSON 파일명을 만든다."""
     output_path = Path(output_path)
@@ -382,13 +398,14 @@ def run_pipeline(
         # ── Step 1.5: 내용 분석 + 텍스트 교정 ─────────────────────────────────
         chapters = None
         summary  = None
+        topic_summary = ""  # ai_summary 폴백/헤더용 한 줄 요약
 
         name_corrections = {}  # 고유명사 교정 사전
         global_keywords  = []  # 전체 강의 핵심 키워드 (빈칸 출제 풀)
 
         if transcript_source == "whisper" and refine:
             print("[TADAC] Whisper 원본 → GPT 내용 분석 (교정은 챕터별 통합처리)")
-            summary, chapters, name_corrections, global_keywords = transcript_refiner._analyze_content(transcript.get("segments", []), title=content_title)
+            summary, chapters, name_corrections, global_keywords, topic_summary = transcript_refiner._analyze_content(transcript.get("segments", []), title=content_title)
 
             # key_terms 기반 결정론적 1글자 오인식 탐지 (3글자 이상)
             fuzzy = _build_fuzzy_corrections(transcript.get("segments", []), global_keywords)
@@ -417,14 +434,15 @@ def run_pipeline(
                 name_corrections.update(new_verified)
         else:
             print("[TADAC] 교정 스킵 → 챕터 분할만 수행")
-            chapters = transcript_refiner.analyze_chapters_only(transcript)
+            chapters, topic_summary = transcript_refiner.analyze_chapters_only(transcript)
 
         # ── Step 2, 3, 4: 통합 처리 (교정 + 키워드 + 퀴즈) ─────────────────────
         all_segments = transcript.get("segments", [])
         chapter_segments_map = quiz_generator._map_segments_to_chapters(all_segments, chapters)
-        
+
         all_enriched_segments = []
         all_quizzes = []
+        chapter_summaries = []  # [(chapter_title, chapter_summary), ...] — ai_summary 합성용
 
         for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
             if not ch_segs:
@@ -462,6 +480,11 @@ def run_pipeline(
 
                 all_quizzes.extend(ch_quizzes)
                 all_enriched_segments.extend(ch_enriched)
+
+                # 챕터 복습 요약 수집 (GPT가 빈 문자열을 줄 수도 있음 → 그땐 스킵)
+                ch_summary = (combined_result.get("chapter_summary") or "").strip()
+                if ch_summary:
+                    chapter_summaries.append((chapter["title"], ch_summary))
 
             else:
                 # 수동 자막인 경우 기존 방식 사용 (교정 생략)
@@ -512,6 +535,10 @@ def run_pipeline(
                 "in_text":     occurrences,   # 자막 텍스트 안 등장 횟수
                 "as_blank":    used,          # 실제 빈칸으로 뽑힌 횟수
             })
+
+        # ai_summary 합성 — 챕터별 복습 요약을 마크다운 목차로 합치고,
+        # 챕터 요약이 비어 있으면(refine=false / 수동 자막) topic_summary 한 줄로 폴백.
+        game_data["ai_summary"] = _compose_ai_summary(topic_summary, chapter_summaries)
 
         # 파이프라인 메타데이터 추가
         game_data["stats"] = {
@@ -630,13 +657,14 @@ def run_pipeline_streaming(
         # 내용 분석 + 챕터 분할 (+ Whisper일 때 교정 맥락)
         chapters = None
         summary  = None
+        topic_summary = ""  # ai_summary 폴백/헤더용 한 줄 요약
 
         name_corrections = {}  # 고유명사 교정 사전
         global_keywords  = []  # 전체 강의 핵심 키워드 (빈칸 출제 풀)
 
         if transcript_source == "whisper" and refine:
             print("[TADAC] [스트리밍] Whisper → 내용 분석 + 배치 교정")
-            summary, chapters, name_corrections, global_keywords = transcript_refiner._analyze_content(all_segments, title=content_title)
+            summary, chapters, name_corrections, global_keywords, topic_summary = transcript_refiner._analyze_content(all_segments, title=content_title)
 
             # key_terms 기반 결정론적 1글자 오인식 탐지 (3글자 이상)
             fuzzy = _build_fuzzy_corrections(all_segments, global_keywords)
@@ -665,13 +693,14 @@ def run_pipeline_streaming(
                 name_corrections.update(new_verified)
         else:
             print("[TADAC] [스트리밍] 교정 스킵 → 챕터 분할만")
-            chapters = transcript_refiner.analyze_chapters_only(transcript)
+            chapters, topic_summary = transcript_refiner.analyze_chapters_only(transcript)
 
         # ── init 이벤트: 챕터 목록 전달 ───────────────────────────────────────
         yield {
             "type":           "init",
             "total_duration": round(total_duration, 3),
             "chapters":       chapters,
+            "topic_summary":  topic_summary,  # 한 줄 주제 — 프론트가 즉시 노출 가능
         }
 
         # ── Phase B: 챕터별 스트리밍 처리 ─────────────────────────────────────
@@ -679,12 +708,15 @@ def run_pipeline_streaming(
 
         all_quizzes = []
         total_enriched_segments = []
+        chapter_summaries = []  # [(chapter_title, chapter_summary), ...] — complete에서 합성
 
         for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
             if not ch_segs:
                 continue
 
             print(f"[TADAC] [스트리밍] 챕터 {ch_idx+1}/{len(chapters)}: '{chapter['title']}' 통합 처리 시작")
+
+            ch_summary = ""  # 챕터 복습 요약 (refine=true 경로에서만 채워짐)
 
             if transcript_source == "whisper" and refine and summary:
                 # 3-in-1 경량 API 호출 (corrections + segment_keywords + quizzes)
@@ -714,6 +746,10 @@ def run_pipeline_streaming(
                     q["trigger_time"] = round(trigger_time, 3)
                     q["segment_range"] = [seg_id_start, seg_id_end]
 
+                ch_summary = (combined_result.get("chapter_summary") or "").strip()
+                if ch_summary:
+                    chapter_summaries.append((chapter["title"], ch_summary))
+
             else:
                 # 기존 분리 호출 (수동 자막)
                 ch_transcript = {
@@ -723,7 +759,7 @@ def run_pipeline_streaming(
                     "language": language,
                 }
                 ch_enriched = keyword_extractor.extract_keywords(ch_transcript, blanks_per_sentence=blanks_per_sentence)
-                
+
                 ch_quizzes = quiz_generator.generate_quizzes(ch_segs, chapters=[chapter])
                 for q in ch_quizzes:
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
@@ -745,6 +781,7 @@ def run_pipeline_streaming(
                 "type":                "chapter_ready",
                 "chapter_index":       ch_idx,
                 "chapter_title":       chapter["title"],
+                "chapter_summary":     ch_summary,  # 복습 요약 (refine=false면 빈 문자열)
                 "corrected_subtitles": ch_corrected_subtitle_data.get("subtitles", []),
                 "subtitles":           ch_game_data.get("subtitles", []),
                 "fall_events":         ch_game_data.get("fall_events", []),
@@ -753,7 +790,8 @@ def run_pipeline_streaming(
 
         # ── complete 이벤트 ───────────────────────────────────────────────────
         yield {
-            "type":  "complete",
+            "type":       "complete",
+            "ai_summary": _compose_ai_summary(topic_summary, chapter_summaries),
             "stats": {
                 "transcript_source": transcript_source,
                 "total_words":       len(transcript.get("words", [])),
@@ -832,6 +870,7 @@ def main():
                 stats = event.get("stats", {})
                 aggregated_corrected_subtitle_data["stats"] = stats
                 aggregated_blank_game_data["stats"] = stats
+                aggregated_blank_game_data["ai_summary"] = event.get("ai_summary", "")
                 
         print("[TADAC] 스트리밍 완료")
 

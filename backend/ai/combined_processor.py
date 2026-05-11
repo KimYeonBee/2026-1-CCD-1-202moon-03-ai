@@ -22,7 +22,7 @@ client = OpenAI(
 def _build_system_prompt(summary, global_keywords, questions_count):
     keywords_str = ", ".join(global_keywords) if global_keywords else "(없음)"
     return f"""너는 ADHD 학습자를 위한 교육용 게임 콘텐츠 생성 AI다.
-입력으로 주어지는 강의 녹취록 챕터(세그먼트 배열 JSON)를 분석하고, 아래 세 가지 작업을 한 번에 수행하여 JSON으로 반환하라.
+입력으로 주어지는 강의 녹취록 챕터(세그먼트 배열 JSON)를 분석하고, 아래 네 가지 작업을 한 번에 수행하여 JSON으로 반환하라.
 
 강의 맥락 및 고유명사 참고:
 {summary}
@@ -52,9 +52,18 @@ def _build_system_prompt(summary, global_keywords, questions_count):
 - 정답은 반드시 지문에 근거해야 하며, 오답은 그럴듯하게 구성하라.
 - 정답 선택 시 피드백은 칭찬과 해설, 오답 선택 시 피드백은 격려와 해설을 포함하라.
 
+[작업 4] 챕터 복습 요약 (chapter_summary)
+- 학습자가 영상을 다시 보지 않고도 이 챕터를 복습할 수 있을 정도의 분량으로 요약하라.
+- 분량: 3~6문장 또는 3~5개 불릿. 너무 짧으면 복습 가치가 없고, 너무 길면 학습 부담이 됨.
+- 포함해야 할 것: 핵심 개념·정의, 등장한 인물·사건·고유명사, 결론·시사점.
+- 발화 그대로 옮기지 말고 학습자가 이해하기 쉬운 정돈된 문장으로 재구성하라.
+- 추측 금지: 챕터에 없는 내용을 보충하거나 일반 상식을 끼워 넣지 마라.
+- 마크다운 사용 가능 (불릿 `-`, **굵게** 등). 헤더(`#`)는 쓰지 마라 — 챕터 제목은 외부에서 붙임.
+
 ★ 출력 규칙:
 - corrections: 수정이 필요한 세그먼트만 포함
 - segment_keywords: 키워드가 있는 세그먼트만 포함
+- chapter_summary: 반드시 포함 (빈 챕터가 아니라면)
 
 출력 형식 (반드시 JSON 형식을 지킬 것):
 {{
@@ -73,7 +82,8 @@ def _build_system_prompt(summary, global_keywords, questions_count):
       "correct_feedback": "정답 해설 및 칭찬",
       "incorrect_feedback": "오답 해설 및 격려"
     }}
-  ]
+  ],
+  "chapter_summary": "이 챕터의 핵심 내용을 정리한 복습용 요약 (3~6문장 또는 불릿 3~5개)"
 }}"""
 
 def process_chapter_unified(chapter_segments, summary, chapter_title, blanks_per_sentence=2, global_keywords=None, questions_count=3):
@@ -87,7 +97,7 @@ def process_chapter_unified(chapter_segments, summary, chapter_title, blanks_per
         dict with keys: corrections, segment_keywords, quizzes
     """
     if not chapter_segments:
-        return {"corrections": [], "segment_keywords": [], "quizzes": []}
+        return {"corrections": [], "segment_keywords": [], "quizzes": [], "chapter_summary": ""}
 
     system_prompt = _build_system_prompt(summary, global_keywords or [], questions_count)
     
@@ -140,4 +150,4 @@ def process_chapter_unified(chapter_segments, summary, chapter_title, blanks_per
                 time.sleep(base_delay)
 
     print("[TADAC] 통합 처리 재시도 초과 → 빈 결과 반환")
-    return {"corrections": [], "segment_keywords": [], "quizzes": []}
+    return {"corrections": [], "segment_keywords": [], "quizzes": [], "chapter_summary": ""}
