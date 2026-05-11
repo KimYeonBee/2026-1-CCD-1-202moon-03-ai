@@ -199,11 +199,12 @@ def _analyze_content(segments, title=None):
         title: 영상/파일 제목 (있으면 분석 맥락에 활용)
 
     Returns:
-        (summary_text, chapters, name_corrections, key_terms)
+        (summary_text, chapters, name_corrections, key_terms, topic_summary)
         - summary_text: 교정용 맥락 텍스트
         - chapters: [{"title": str, "start_sec": float, "end_sec": float}, ...]
         - name_corrections: {"잘못된 표기": "올바른 표기", ...}
         - key_terms: 전체 강의 핵심 키워드 목록 (빈칸 출제 풀로 사용)
+        - topic_summary: 강의 주제 한 문장 요약 (ai_summary 폴백용)
     """
     total_duration = max(seg.get("end", 0.0) for seg in segments)
     total_min = total_duration / 60
@@ -242,7 +243,7 @@ def _analyze_content(segments, title=None):
         print(f"[TADAC] 내용 분석 JSON 파싱 오류: {e}")
         summary_text = ""
         chapters = [{"title": "전체 내용", "start_sec": 0.0, "end_sec": total_duration}]
-        return summary_text, chapters, {}
+        return summary_text, chapters, {}, [], ""
 
     # 교정용 맥락 텍스트 구성
     topic = data.get("topic_summary", "")
@@ -303,7 +304,7 @@ def _analyze_content(segments, title=None):
     for i, ch in enumerate(chapters):
         print(f"  [{i+1}] {ch['start_sec']/60:.0f}분~{ch['end_sec']/60:.0f}분: {ch['title']}")
 
-    return summary_text, chapters, name_corrections, key_terms
+    return summary_text, chapters, name_corrections, key_terms, topic
 
 
 # ── 검수 패스: key_terms 기반 STT 오인식 탐지 ────────────────────────────────
@@ -517,7 +518,7 @@ def refine(transcript: dict, title: str = None):
 
     # 1. 전체 내용 분석 — 맥락 요약 + 챕터 분할 (GPT 1회)
     print("[TADAC] 강의 내용 분석 중 (맥락 요약 + 챕터 분할)...")
-    summary, chapters, _, _ = _analyze_content(segments, title=title)
+    summary, chapters, _, _, _ = _analyze_content(segments, title=title)
     print(f"[TADAC] 내용 분석 완료")
 
     # 2. 배치 단위로 GPT 교정
@@ -572,25 +573,27 @@ def refine(transcript: dict, title: str = None):
 
 def analyze_chapters_only(transcript: dict):
     """
-    교정 없이 챕터 분할만 수행.
+    교정 없이 챕터 분할 + 한 줄 주제 요약 수행.
     YouTube 자막처럼 이미 완성된 텍스트에 사용.
 
     Returns:
-        chapters: [{"title": str, "start_sec": float, "end_sec": float}, ...]
+        (chapters, topic_summary)
+        - chapters: [{"title": str, "start_sec": float, "end_sec": float}, ...]
+        - topic_summary: 강의 주제 한 문장 (refine=false 경로의 ai_summary 폴백)
     """
     segments = transcript.get("segments", [])
 
     if not segments:
         print("[TADAC] 세그먼트가 없어 챕터 분석 불가")
-        return []
+        return [], ""
 
     total_duration = max(seg.get("end", 0.0) for seg in segments)
 
     # 5분 미만이면 단일 챕터
     if total_duration < 300:
         print("[TADAC] 5분 미만 → 단일 챕터")
-        return [{"title": "전체 내용", "start_sec": 0.0, "end_sec": total_duration}]
+        return [{"title": "전체 내용", "start_sec": 0.0, "end_sec": total_duration}], ""
 
     print("[TADAC] 챕터 분석 시작 (교정 없이)")
-    _, chapters, _, _ = _analyze_content(segments)
-    return chapters
+    _, chapters, _, _, topic = _analyze_content(segments)
+    return chapters, topic
