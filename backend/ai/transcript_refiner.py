@@ -23,6 +23,73 @@ client = OpenAI(
 )
 
 
+# ── 교정용 LLM 모델 설정 ──────────────────────────────────────────────────────
+# 환경변수 CORRECTION_MODEL 로 모델 교체. provider는 모델 ID prefix로 자동 판정.
+#   - "claude-*"  → Anthropic API   (예: claude-haiku-4-5, claude-sonnet-4-6)
+#   - 그 외       → OpenAI  API      (예: gpt-4o-mini, gpt-4o)
+# 기본값은 Haiku 4.5 — 4o-mini급 가격에 한국어 STT 교정 품질이 더 우수.
+
+CORRECTION_MODEL = os.getenv("CORRECTION_MODEL", "claude-haiku-4-5")
+
+
+def _is_anthropic_model(model_id: str) -> bool:
+    return model_id.startswith("claude")
+
+
+# Anthropic 클라이언트는 lazy init — Claude 모델 안 쓰면 anthropic 패키지 import도 안 함
+_anthropic_client = None
+
+def _get_anthropic_client():
+    global _anthropic_client
+    if _anthropic_client is None:
+        import anthropic
+        _anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    return _anthropic_client
+
+
+def _llm_json(system: str, user: str, temperature: float = 0.1, max_tokens: int = 8192) -> str:
+    """provider-agnostic JSON completion. CORRECTION_MODEL 환경변수에 따라 분기.
+
+    반환값은 raw JSON 문자열 — 호출 측에서 json.loads() 한다.
+    """
+    if _is_anthropic_model(CORRECTION_MODEL):
+        # Claude: system에 "JSON만 반환" 명시. system 블록은 prompt caching 활성화 —
+        # 배치 교정처럼 동일 system을 N번 호출하는 케이스에서 비용/지연 대폭 감소.
+        resp = _get_anthropic_client().messages.create(
+            model      = CORRECTION_MODEL,
+            max_tokens = max_tokens,
+            system     = [{
+                "type":          "text",
+                "text":          system + "\n\n반드시 유효한 JSON만 반환하라. 마크다운 코드 펜스(```) 금지.",
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages   = [{"role": "user", "content": user}],
+        )
+        text = resp.content[0].text.strip()
+        # 혹시 ```json ... ``` 형태로 왔으면 펜스 제거
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text.rsplit("```", 1)[0]
+            text = text.strip()
+        return text
+
+    # OpenAI 경로 — 기존 동작 유지 (response_format으로 JSON 강제)
+    resp = client.chat.completions.create(
+        model           = CORRECTION_MODEL,
+        temperature     = temperature,
+        response_format = {"type": "json_object"},
+        messages        = [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": user},
+        ],
+    )
+    return resp.choices[0].message.content
+
+
+print(f"[TADAC] 교정 모델: {CORRECTION_MODEL} (provider: {'anthropic' if _is_anthropic_model(CORRECTION_MODEL) else 'openai'})")
+
+
 # ── 빈칸 키워드 stopword ──────────────────────────────────────────────────────
 # GPT(특히 gpt-4o-mini)가 프롬프트 지시를 무시하고 generic word를 골라내는 경우가
 # 잦아서, 결정론적 후처리로 강제 제거. 학습자가 강의를 듣지 않고도 추측할 수
@@ -226,17 +293,7 @@ def _analyze_content(segments, title=None):
 
     user_prompt = "\n".join(lines)
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0.1,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": ANALYSIS_PROMPT},
-            {"role": "user",   "content": user_prompt},
-        ],
-    )
-
-    raw = response.choices[0].message.content
+    raw = _llm_json(ANALYSIS_PROMPT, user_prompt)
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
@@ -352,16 +409,7 @@ def verify_with_key_terms(segments, key_terms):
 {full_text}"""
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            temperature=0.1,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": VERIFY_PROMPT},
-                {"role": "user",   "content": user_prompt},
-            ],
-        )
-        raw = response.choices[0].message.content
+        raw = _llm_json(VERIFY_PROMPT, user_prompt)
         data = json.loads(raw)
     except (json.JSONDecodeError, Exception) as e:
         print(f"[TADAC] 검수 패스 오류: {e}")
@@ -441,17 +489,7 @@ def _correct_segments_batch(batch_segments, summary, full_text):
 
     for attempt in range(max_retries):
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                temperature=0.1,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": correction_system_prompt},
-                    {"role": "user",   "content": user_prompt},
-                ]
-            )
-
-            raw = response.choices[0].message.content
+            raw = _llm_json(correction_system_prompt, user_prompt)
             data = json.loads(raw)
 
             # 결과 파싱 — id → 교정 텍스트 매핑

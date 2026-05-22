@@ -1,137 +1,205 @@
 # -*- coding: utf-8 -*-
 """
-STT 모듈 — Whisper API로 음성을 텍스트로 변환
+STT 모듈 — 학교 GPU 서버의 로컬 Whisper API를 호출하여 음성→텍스트 변환
 
-- 단어별 타임스탬프 추출 (빈칸 낙하 동기화 핵심)
-- 25MB 초과 파일은 10분씩 잘라서 처리 후 합치기
+- 학교 GPU 서버(app_whisper.py)가 OpenAI Audio Transcriptions API 규격을 모방하므로
+  OpenAI SDK의 base_url만 변경하여 호출
+- 서버에서 받은 단어 타임스탬프를 세그먼트로 그루핑 (문장 종결 부호 + 묵음 기반)
+- 출력 포맷은 기존과 동일: {text, words, segments, language}
 """
 
 import os
-import math
-import tempfile
+import time
 from pathlib import Path
 
-from openai import OpenAI
-from pydub import AudioSegment
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 
-# OpenAI 클라이언트 초기화 (Whisper는 게이트웨이 미지원 → OpenAI 직접 연결)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ── 원격 Whisper 서버 설정 ───────────────────────────────────────────────────────
+WHISPER_API_URL = os.getenv("WHISPER_API_URL", "http://210.94.179.19:8002/v1")
 
-# Whisper API 파일 크기 제한 25MB
-WHISPER_SIZE_LIMIT = 25 * 1024 * 1024  # 25MB (바이트)
-CHUNK_DURATION_MS  = 10 * 60 * 1000    # 청크 길이: 10분 (밀리초)
+_whisper_client = None
 
-
-# ── 단일 파일 음성 인식 ────────────────────────────────────────────────────────
-# Whisper API에 파일을 보내고 단어별 타임스탬프를 받아옴
-
-def _transcribe_chunk(audio_path, language, prompt):
-    with open(audio_path, "rb") as f:
-        # timestamp_granularities=["word"] → 단어 단위 타임스탬프 (낙하 이벤트 동기화 핵심)
-        kwargs = dict(
-            model="whisper-1",
-            file=f,
-            response_format="verbose_json",
-            timestamp_granularities=["word", "segment"],
-            language=language,           # 언어 힌트 (정확도 향상)
+def _get_whisper_client():
+    global _whisper_client
+    if _whisper_client is None:
+        import httpx
+        _whisper_client = OpenAI(
+            base_url=WHISPER_API_URL,
+            api_key="local",
+            timeout=httpx.Timeout(1800.0, connect=30.0),
         )
-        if prompt:
-            kwargs["prompt"] = prompt    # 전문 용어 힌트 (선택)
-
-        response = client.audio.transcriptions.create(**kwargs)
-
-    return response.model_dump()
+        print(f"[TADAC] Whisper API 클라이언트 초기화: {WHISPER_API_URL}")
+    return _whisper_client
 
 
-# ── 대용량 파일 분할 ──────────────────────────────────────────────────────────
-# 25MB 초과 시 pydub으로 10분씩 잘라서 청크 파일 목록 반환
+# ── words → segments 그루핑 ──────────────────────────────────────────────────────
 
-def _split_audio(audio_path, chunk_dir):
-    ext = Path(audio_path).suffix.lower().lstrip(".")  # 확장자 추출
+SENTENCE_END_CHARS = {".", "?", "!", "。", "?", "!"}
 
-    # 확장자에 맞게 오디오 파일 읽기
-    if ext == "mp3":
-        audio = AudioSegment.from_mp3(audio_path)
-    elif ext == "wav":
-        audio = AudioSegment.from_wav(audio_path)
-    else:
-        audio = AudioSegment.from_file(audio_path)
-
-    total_ms = len(audio)  # 전체 길이 (밀리초)
-    n_chunks  = math.ceil(total_ms / CHUNK_DURATION_MS)  # 청크 개수
-
-    print(f"[TADAC] 오디오 분할: {n_chunks}개 청크 (총 {total_ms/1000:.1f}초)")
-
-    # 10분씩 자르고 임시 폴더에 저장
-    chunk_paths = []
-    for i in range(n_chunks):
-        start = i * CHUNK_DURATION_MS
-        end   = min((i + 1) * CHUNK_DURATION_MS, total_ms)
-        chunk = audio[start:end]
-
-        chunk_path = os.path.join(chunk_dir, f"chunk_{i:03d}.mp3")
-        chunk.export(chunk_path, format="mp3")
-        chunk_paths.append(chunk_path)
-
-        print(f"[TADAC] 청크 {i+1}/{n_chunks}: {start/1000:.1f}s ~ {end/1000:.1f}s")
-
-    return chunk_paths
+MIN_SEGMENT_SEC = 2.5
 
 
-# ── 청크 결과 합치기 ──────────────────────────────────────────────────────────
-# 각 청크의 타임스탬프에 오프셋을 더해서 전체 타임라인으로 병합
+def _dedupe_hallucination_loops(segments, min_duration=0.1):
+    """Whisper 디코더 반복 루프로 생긴 zero-duration 중복 세그먼트 제거."""
+    if not segments:
+        return segments
 
-def _merge_results(results, chunk_offsets_sec):
-    merged_words    = []
-    merged_segments = []
-    full_text_parts = []
-    seg_id_offset   = 0  # 세그먼트 ID가 청크마다 0부터 시작 → 전체 기준으로 보정
+    result  = [dict(segments[0])]
+    dropped = 0
+    for seg in segments[1:]:
+        prev        = result[-1]
+        is_zero_dur = (seg["end"] - seg["start"]) < min_duration
+        same_text   = seg["text"].strip() == prev["text"].strip()
+        if is_zero_dur and same_text:
+            dropped += 1
+            continue
+        result.append(dict(seg))
 
-    for result, offset in zip(results, chunk_offsets_sec):
-        full_text_parts.append(result.get("text", "").strip())
+    if dropped:
+        print(f"[TADAC] 환각 루프 제거: {dropped}개 중복 세그먼트")
 
-        # 단어 타임스탬프에 오프셋 더하기
-        for word in result.get("words", []):
-            merged_words.append({
-                "word":  word["word"],
-                "start": round(word["start"] + offset, 3),
-                "end":   round(word["end"]   + offset, 3),
-            })
+    for i, seg in enumerate(result):
+        seg["id"] = i
 
-        # 세그먼트 타임스탬프에도 오프셋 더하기
-        for seg in result.get("segments", []):
-            merged_seg          = dict(seg)
-            merged_seg["id"]    = seg_id_offset + seg.get("id", 0)
-            merged_seg["start"] = round(seg["start"] + offset, 3)
-            merged_seg["end"]   = round(seg["end"]   + offset, 3)
-            merged_segments.append(merged_seg)
+    return result
 
-        seg_id_offset += len(result.get("segments", []))
+
+def _merge_short_segments(segments, min_sec=MIN_SEGMENT_SEC):
+    """길이가 min_sec 미만인 세그먼트를 인접 세그먼트와 병합."""
+    if not segments:
+        return segments
+
+    result = []
+    buf    = None
+
+    for seg in segments:
+        if buf is None:
+            buf = dict(seg)
+            continue
+
+        if (buf["end"] - buf["start"]) < min_sec:
+            buf["end"]  = seg["end"]
+            buf["text"] = (buf["text"] + " " + seg["text"]).strip()
+        else:
+            result.append(buf)
+            buf = dict(seg)
+
+    if buf is not None:
+        if (buf["end"] - buf["start"]) < min_sec and result:
+            last = result[-1]
+            last["end"]  = buf["end"]
+            last["text"] = (last["text"] + " " + buf["text"]).strip()
+        else:
+            result.append(buf)
+
+    for i, seg in enumerate(result):
+        seg["id"]    = i
+        seg["start"] = round(seg["start"], 3)
+        seg["end"]   = round(seg["end"],   3)
+
+    return result
+
+
+def _group_words_into_segments(words, max_gap_sec=1.5):
+    """단어 리스트를 문장 종결 부호 또는 긴 묵음 기준으로 segment 단위로 묶기."""
+    segments = []
+    current  = []
+    seg_id   = 0
+
+    def _flush():
+        nonlocal current, seg_id
+        if not current:
+            return
+        segments.append({
+            "id":    seg_id,
+            "start": round(current[0]["start"], 3),
+            "end":   round(current[-1]["end"],   3),
+            "text":  "".join(w["word"] for w in current).strip(),
+        })
+        seg_id += 1
+        current = []
+
+    for i, w in enumerate(words):
+        current.append(w)
+        text_stripped = w["word"].strip()
+
+        if text_stripped and text_stripped[-1] in SENTENCE_END_CHARS:
+            _flush()
+            continue
+
+        if i + 1 < len(words):
+            gap = words[i + 1]["start"] - w["end"]
+            if gap >= max_gap_sec:
+                _flush()
+
+    _flush()
+    return segments
+
+
+# ── 원격 Whisper 호출 ────────────────────────────────────────────────────────────
+
+MAX_RETRIES    = 3
+RETRY_BASE_SEC = 5
+
+
+def _run_transcribe(audio_path, language, prompt):
+    """학교 GPU 서버의 Whisper API를 호출하여 추론 결과를 받아오고 후처리."""
+    client = _get_whisper_client()
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            with open(audio_path, "rb") as f:
+                response = client.audio.transcriptions.create(
+                    model="whisper-large-v3",
+                    file=f,
+                    language=language or "ko",
+                    prompt=prompt or "",
+                    response_format="verbose_json",
+                    timestamp_granularities=["word"],
+                )
+            break
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_BASE_SEC * (2 ** attempt)
+                print(f"[TADAC] Whisper API 호출 실패: {e} → {delay}초 후 재시도 ({attempt + 1}/{MAX_RETRIES})")
+                time.sleep(delay)
+            else:
+                raise RuntimeError(f"Whisper API 호출 실패 (재시도 소진): {e}") from e
+
+    all_words = []
+    for w in (response.words or []):
+        all_words.append({
+            "word":  w.word,
+            "start": round(w.start, 3),
+            "end":   round(w.end, 3),
+        })
+
+    segments = _group_words_into_segments(all_words)
+    segments = _dedupe_hallucination_loops(segments)
+    before   = len(segments)
+    segments = _merge_short_segments(segments)
+    if before != len(segments):
+        print(f"[TADAC] 짧은 세그먼트 병합: {before}개 → {len(segments)}개 (min {MIN_SEGMENT_SEC}초)")
 
     return {
-        "text":     " ".join(full_text_parts),
-        "words":    merged_words,
-        "segments": merged_segments,
-        "language": results[0].get("language", "ko") if results else "ko",
+        "text":     response.text.strip(),
+        "words":    all_words,
+        "segments": segments,
+        "language": language or "ko",
     }
 
 
-# ── 메인 함수 ─────────────────────────────────────────────────────────────────
-# 음성 파일 경로를 받아 Whisper STT 결과 반환
+# ── 메인 함수 ────────────────────────────────────────────────────────────────────
 
 def transcribe(audio_path, language="ko", stt_prompt=None, title=None):
     audio_path = str(Path(audio_path).resolve())
-    file_size  = os.path.getsize(audio_path)  # 파일 크기 (바이트)
+    file_size  = os.path.getsize(audio_path)
 
-    print(f"[TADAC] STT 시작: {audio_path} ({file_size / 1024 / 1024:.1f} MB)")
+    print(f"[TADAC] STT 시작 (원격): {audio_path} ({file_size / 1024 / 1024:.1f} MB)")
 
-    # 영상/파일 제목 + 사용자 prompt 결합.
-    # Whisper prompt는 vocabulary biasing(단어 인식 정확도 향상) 효과뿐 아니라
-    # 출력 스타일(문장 길이/구두점)까지 모방하므로, 제목을 그대로 넣으면
-    # 짧고 단편적인 segments가 양산됨. → 자연스러운 강의 톤 문장으로 감싸서 전달.
     parts = []
     if title:
         if language == "ko":
@@ -144,32 +212,10 @@ def transcribe(audio_path, language="ko", stt_prompt=None, title=None):
     if effective_prompt:
         print(f"[TADAC] STT 프롬프트 힌트: {effective_prompt[:120]}")
 
-    # 25MB 이하 → 바로 Whisper 전송
-    if file_size <= WHISPER_SIZE_LIMIT:
-        print("[TADAC] 25MB 이하 → 직접 변환")
-        result = _transcribe_chunk(audio_path, language, effective_prompt)
-        print(f"[TADAC] STT 완료: 단어 {len(result.get('words', []))}개, "
-              f"세그먼트 {len(result.get('segments', []))}개")
-        return result
+    result = _run_transcribe(audio_path, language, effective_prompt)
 
-    # 25MB 초과 → 청크 분할 후 병합
-    print("[TADAC] 25MB 초과 → 청크 분할 처리")
-    with tempfile.TemporaryDirectory(prefix="tadac_chunks_") as chunk_dir:
-        chunk_paths = _split_audio(audio_path, chunk_dir)
+    print(f"[TADAC] STT 완료: 단어 {len(result.get('words', []))}개, "
+          f"세그먼트 {len(result.get('segments', []))}개 | "
+          f"언어: {result.get('language', '?')}")
 
-        # 각 청크의 시작 오프셋 계산 (이전 청크 길이 누적)
-        offsets = [0.0]
-        for cp in chunk_paths[:-1]:
-            duration = len(AudioSegment.from_file(cp)) / 1000.0  # 밀리초 → 초
-            offsets.append(offsets[-1] + duration)
-
-        # 청크별 음성 인식
-        results = []
-        for i, (cp, offset) in enumerate(zip(chunk_paths, offsets)):
-            print(f"[TADAC] 청크 {i+1}/{len(chunk_paths)} 변환 중 (오프셋 {offset:.1f}s)")
-            results.append(_transcribe_chunk(cp, language, effective_prompt))
-
-        # 전체 결과 병합
-        merged = _merge_results(results, offsets)
-        print(f"[TADAC] 병합 완료: 단어 {len(merged['words'])}개, 세그먼트 {len(merged['segments'])}개")
-        return merged
+    return result

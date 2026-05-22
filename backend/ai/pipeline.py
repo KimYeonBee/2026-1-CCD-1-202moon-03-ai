@@ -101,67 +101,6 @@ def _save_raw_transcript(transcript, output_dir=None):
     return raw_path
 
 
-# ── 유사 오인식 자동 탐지 ─────────────────────────────────────────────────────
-# key_terms 목록을 정답 기준으로 삼아, 텍스트에서 1글자만 다른 오인식을 찾아냄
-# 예: key_term="문벌귀족" vs 텍스트 내 "문벌기족" → 자동 교정 대상
-
-def _build_fuzzy_corrections(segments, key_terms):
-    """key_terms를 ground truth로 삼아 STT 오인식을 결정론적으로 찾아 교정.
-
-    설계 원칙:
-    1. 길이 — 2글자 단어는 오탐 위험이 커서 3글자 이상만 대상.
-    2. 띄어쓰기 비대칭 — 풀 term이 공백을 포함해도 STT는 보통 공백 없이 받아쓰므로
-       풀 term의 공백 제거 변형도 매칭 후보에 포함.
-    3. 빈도 비교 — 풀 term이 자막에 정확히 등장해도, 변형이 정답보다 더 자주 나오면
-       그 변형을 STT 오타로 등록. (정답이 한두 번 끼어 있는 경우에 대응)
-    4. diff 허용치 — 1글자 차이는 항상 허용. 2글자 차이는 4글자 이상 단어에서만 허용
-       (짧은 단어에서 2자 차이는 별개 entity일 가능성이 높음).
-    5. entity 스왑 보호 — 후보가 다른 풀 term과 일치하면 별개 단어이므로 skip.
-    """
-    all_text = " ".join(seg.get("text", "") for seg in segments)
-
-    # 매칭 후보: 풀 term과 그 공백 제거 변형 (원본 term으로 매핑 보존)
-    term_variants = {}  # variant 표기 → 자막 치환 시 적용할 원본 term
-    for term in key_terms:
-        if len(term) < 3:
-            continue
-        term_variants[term] = term
-        no_space = term.replace(" ", "")
-        if no_space != term and len(no_space) >= 3:
-            term_variants.setdefault(no_space, term)
-
-    all_variants = set(term_variants.keys())
-    key_terms_set = set(key_terms)
-    corrections = {}
-
-    for variant, original in term_variants.items():
-        v_len = len(variant)
-        variant_count = all_text.count(variant)
-
-        seen = set()
-        for i in range(len(all_text) - v_len + 1):
-            candidate = all_text[i:i + v_len]
-            if candidate in seen or candidate == variant:
-                continue
-            seen.add(candidate)
-            # 별개 entity 보호 — 후보가 풀의 다른 단어/변형이면 skip
-            if candidate in all_variants or candidate in key_terms_set:
-                continue
-
-            diff_count = sum(1 for a, b in zip(variant, candidate) if a != b)
-            if diff_count == 0:
-                continue
-            if not (diff_count == 1 or (diff_count == 2 and v_len >= 4)):
-                continue
-
-            # 빈도 검증 — 정답이 자막에 없거나 후보가 더 자주 등장해야 STT 오타로 인정
-            cand_count = all_text.count(candidate)
-            if variant_count == 0 or cand_count > variant_count:
-                corrections[candidate] = original
-
-    return corrections
-
-
 # ── 키워드 폴백 보완 ─────────────────────────────────────────────────────────
 # GPT가 놓친 키워드를 global_keywords 문자열 매칭으로 채움
 
@@ -406,19 +345,6 @@ def run_pipeline(
         if transcript_source == "whisper" and refine:
             print("[TADAC] Whisper 원본 → GPT 내용 분석 (교정은 챕터별 통합처리)")
             summary, chapters, name_corrections, global_keywords, topic_summary = transcript_refiner._analyze_content(transcript.get("segments", []), title=content_title)
-
-            # key_terms 기반 결정론적 1글자 오인식 탐지 (3글자 이상)
-            fuzzy = _build_fuzzy_corrections(transcript.get("segments", []), global_keywords)
-            fuzzy = {
-                wrong: correct
-                for wrong, correct in fuzzy.items()
-                if transcript_refiner._is_safe_name_correction(wrong, correct)
-            }
-            if fuzzy:
-                print(f"[TADAC] 유사 오인식 자동 탐지: {len(fuzzy)}개")
-                for wrong, correct in fuzzy.items():
-                    print(f"  {wrong} → {correct}")
-                name_corrections.update(fuzzy)
 
             # GPT 검수 패스: key_terms를 ground truth로 추가 STT 오인식 식별
             verified = transcript_refiner.verify_with_key_terms(transcript.get("segments", []), global_keywords)
@@ -665,19 +591,6 @@ def run_pipeline_streaming(
         if transcript_source == "whisper" and refine:
             print("[TADAC] [스트리밍] Whisper → 내용 분석 + 배치 교정")
             summary, chapters, name_corrections, global_keywords, topic_summary = transcript_refiner._analyze_content(all_segments, title=content_title)
-
-            # key_terms 기반 결정론적 1글자 오인식 탐지 (3글자 이상)
-            fuzzy = _build_fuzzy_corrections(all_segments, global_keywords)
-            fuzzy = {
-                wrong: correct
-                for wrong, correct in fuzzy.items()
-                if transcript_refiner._is_safe_name_correction(wrong, correct)
-            }
-            if fuzzy:
-                print(f"[TADAC] 유사 오인식 자동 탐지: {len(fuzzy)}개")
-                for wrong, correct in fuzzy.items():
-                    print(f"  {wrong} → {correct}")
-                name_corrections.update(fuzzy)
 
             # GPT 검수 패스: key_terms를 ground truth로 추가 STT 오인식 식별
             verified = transcript_refiner.verify_with_key_terms(all_segments, global_keywords)
