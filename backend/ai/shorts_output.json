@@ -1,0 +1,74 @@
+[
+  {
+    "concept": "재화 유형론을 이해하기 위해 경합성과 배제성의 개념을 극단적으로 비교하는 비유를 사용했습니다. 이는 시청자가 각 재화의 특성을 쉽게 기억하도록 도와줍니다.",
+    "opening": "상상해보세요! 경합하는 두 사람이 한 조각 케이크를 놓고 싸우는 상황. 누가 먼저 먹느냐에 따라 케이크의 크기는 줄어들고, 남은 사람은 슬퍼지죠. 바로 이게 '경합'의 본질입니다.",
+    "script": "재화에는 '경합'과 '비경합'이 있습니다. 케이크처럼 경합하는 재화는 누군가 쓰면 줄어들고, 비경합은 모두 나눠 먹어도 맛있습니다. 배제는 돈으로 해결되죠. 민간재는 시장이, 공공재는 정부가 책임져요! 공유재는 외부 불경제, 소유권이 없으니 다 함께 고갈되기만 하네요. 결국 정부 규제가 필요해요.",
+    "video_prompt": "Visualize a lively cake-eating contest between two animated characters, one trying to grab the cake while the other looks on sadly. Transition to a vibrant market scene, showing various types of goods, categorized as private, public, and shared resources. Illustrate government intervention with a humorous character dressed as a bureaucrat, waving a regulation book. Include visual gags of characters competing for resources and a pie chart showing resource allocation. Bright colors and dynamic camera angles to maintain engagement.",
+    "memory_point": "경합과 비경합, 배제와 비배제성을 기억하라! 재화의 유형을 파악하는 열쇠는 바로 정부와 시장의 역할이다.",
+    "chapter_index": 0,
+    "chapter_title": "재화 유형론 개요: 경합성·배제성과 4가지 재화 분류"
+  },
+  {
+    "concept": "재화 유형론에서 공유재의 비극을 통해 시장 실패와 정부 규제를 연결짓기 위한 비유. '공공재'와 '사익'이라는 두 개의 자전거 바퀴가 충돌하며 결국 모두가 넘어지는 상황으로 묘사하여, 이론의 복잡함을 쉽게 기억하도록 유도.",
+    "opening": "상상해보세요, 두 개의 자전거 바퀴가 '공공재'와 '사익'이라고 적혀 있습니다. 둘이 충돌하면 어떻게 될까요? 모두가 넘어진답니다!",
+    "script": "모두가 공짜인 공유재를 마구 쓰면 어떻게 될까요? 자전거 바퀴처럼 서로 충돌하며 시장이 실패하게 되죠. 이건 '공유지의 비극'이라 부르며, 결국 사익 추구가 공익을 해칩니다. 그래서 정부가 개입해야 하는데, 규제나 소유권이 필요하죠. 하딘은 소유권이 낫다고 주장하고, 오스트롬은 공동체 합의가 더 중요하다고 했어요. 결국, 부정외부효과가 발생한다는 거죠!",
+    "video_prompt": "A vibrant animation showing two bicycle wheels labeled 'Public Goods' and 'Private Interest' colliding dramatically, causing a chain reaction of chaos. As the wheels clash, scenes of people overusing resources play out, leading to a barren landscape. Transition to illustrations of government interventions: regulation and property rights, followed by a debate between two animated characters representing Hardin and Ostrom, each presenting their theories with exaggerated gestures. Bright colors and fast camera movements emphasize the urgency and humor of the situation.",
+    "memory_point": "공유재의 비극은 사익 추구가 공익을 해치며, 정부 개입이 필수적이라는 사실을 잊지 말자!",
+    "chapter_index": 1,
+    "chapter_title": "공유지의 비극: 시장 실패와 공익 과정설·실체설 연계"
+  },
+  {
+    "concept": "하딘과 오스트롬의 해결 방안을 통해 공유지 문제를 이해하기 — 공유지는 마치 만원 버스에서 자리를 차지하려는 사람들처럼, 제한된 자원에 대한 경합과 비배제가 얽혀 있어 소통과 협력이 필요하다는 것을 강조합니다.",
+    "opening": "만원 버스에서 자리를 두고 치열한 전쟁이 벌어지는 상황을 상상해보세요. 누가 먼저 자리를 차지할지, 그리고 그 자리를 지키기 위해 발버둥치는 모습이죠.",
+    "script": "하딘의 '비극'처럼, 공유지는 마치 만원 버스의 자리 싸움처럼 경합을 유발해요. 한편 오스트롬은 혜택을 나누는 방법으로 바우처를 제안하죠! 교육과 의료를 지원하는 국립학교와 병원은 마치 도시의 숨은 영웅! 소득을 얻는 길, 이걸 정부가 도와야 한다는 거죠. 결국, 우리는 함께 공존할 방법을 찾아야 해요!",
+    "video_prompt": "The scene opens in a crowded bus, with people fighting for seats, illustrating the competition for shared resources. Quick cuts to a government official present a voucher system for healthcare and education, showing citizens happily receiving vouchers. Bright colors symbolize hope and collaboration, while humorous animations depict the struggle for seats turning into a harmonious community sharing resources. The camera zooms in on smiling faces as they enjoy the benefits of public services.",
+    "memory_point": "공유지는 만원 버스처럼, 협력 없이는 모두가 손해 본다!",
+    "chapter_index": 2,
+    "chapter_title": "하딘과 오스트롬: 공유지 해결 방안 비교"
+  },
+  {
+    "concept": "재화 유형론의 복잡한 개념을 쉽게 기억하기 위해 '재화의 성격을 배우는 격투기 대회'라는 비유를 설정했다. 각 재화 유형이 대회에서 다른 방식으로 싸우는 모습으로 설명하여 잊지 못할 인상으로 남기기 위함이다.",
+    "opening": "재화의 성격을 배우는 격투기 대회에 참가한 것처럼 생각해보세요. 공공재는 심판이 없는 자유로운 경기장, 공유재는 모두가 싸우지만 한계가 있는 링을 연상시킵니다.",
+    "script": "공공재는 심판 없는 무료 경기장, 무임승차 관중이 가득해요! 공유재는 과소비 싸움터, 싸우다 과부하가 걸리죠. 반면 민간재는 경합과 배제가 있는 격투기 링, 시장이 관리합니다. 유료재는 요금 지불 필수! 고속도로처럼, 안 내면 큰 패널티가 기다리죠. 자연독점이 생기면 가격 상승과 생산량 감소, 결국 비효율성이 나타나죠. 이 모든 것이 시장 실패를 부르는 원인입니다!",
+    "video_prompt": "In a bright, dynamic fight arena, visualize a boxing ring where characters represent different types of goods. Public goods are carefree spectators enjoying an open space, while common goods are fighters battling over limited resources. Private goods are in a competitive boxing match, while toll goods are shown with a sign indicating payment required, and a referee enforcing penalties. Use comedic expressions and exaggerated movements to emphasize the chaos and competition, with quick cuts and colorful graphics to highlight the concepts.",
+    "memory_point": "재화의 성격은 싸움의 방식에 따라 다르다: 공공재는 무료, 공유재는 과소비, 민간재는 경합이다!",
+    "chapter_index": 3,
+    "chapter_title": "재화 유형 사례 적용과 문제 풀이"
+  },
+  {
+    "concept": "재화 유형론과 시장 실패, 정부 규제의 관계를 코믹하게 정리하여 이해를 돕기 위함.",
+    "opening": "어느 날, 시장이 파티를 열었는데, 규제라는 초대장이 없으면 혼란이 벌어졌어요!",
+    "script": "시장이 파티를 여니까, 효율성과 형평성의 실패가 춤추며 난장판을 만들었어요! 규제란, 법이라는 마법의 지팡이를 들고 나타난 정부의 요정이에요. 담배를 피우는 자가 공공장소에서 불을 붙이면, 규제의 마법이 발동해요. 낚시로 강을 오염시키면, 규제가 '노 낚시!'라고 외쳐요. 법은 의회가 만드는 게 기본이지만, 행정부도 법안을 제안할 수 있어요. 하지만 규제 영향분석은 사전, 사전! 신설이나 강화할 때만 적용된답니다.",
+    "video_prompt": "A vibrant party scene representing a chaotic market with people dancing wildly. The camera zooms in on a whimsical fairy (the government) waving a magic wand (regulation) to restore order. Colorful animations depict smoke from cigarettes and polluted rivers, emphasizing the need for regulation. Transition to a serious legislative setting where a character in a suit (the administrative head) presents a bill with a big 'Pre-Analysis Required!' sign. The animation ends with a humorous reminder of the importance of prior analysis before any changes.",
+    "memory_point": "규제는 시장 실패를 막기 위한 정부의 마법, 사전 분석은 필수!",
+    "chapter_index": 4,
+    "chapter_title": "규제의 개념과 시장 실패·정부 개입의 근거"
+  },
+  {
+    "concept": "경제 규제와 사회 규제는 마치 오래된 고전 영화와 최신 블록버스터처럼, 각기 다른 시대의 산물이다.",
+    "opening": "고전 영화는 세상에 처음 등장했지만, 요즘은 블록버스터가 모든 관심을 끌죠. 경제 규제와 사회 규제도 바로 그런 싸움이에요.",
+    "script": "경제 규제는 19세기부터 시작된 효율성의 규제! 제품 생산을 위해 정보가 개입하죠. 사회 규제는 1960년대에 등장해 환경과 사람의 안전을 지키는 역할을 해요. 삼성의 반도체가 5천 개인데 수요는 만 개? 경제 규제가 개입해요. 반면, 안전과 환경이 문제라면 사회 규제가 필요하죠. 정부가 직접 규제하거나, 민간이 자율적으로 규제하는 것도 모두 중요해요.",
+    "video_prompt": "A split-screen scene showing a classic black-and-white film reel on one side labeled 'Economic Regulation' and a vibrant, colorful blockbuster movie poster on the other side labeled 'Social Regulation'. The camera zooms in on the film reel, showing scenes of factories and production lines, while the blockbuster side features clips of environmental activism and safety inspections. Add comedic elements like exaggerated reactions of people in safety gear, and a character accidentally tripping over a safety cone.",
+    "memory_point": "경제 규제는 생산의 효율성을, 사회 규제는 사람의 안전을 지킨다!",
+    "chapter_index": 5,
+    "chapter_title": "경제 규제와 사회 규제의 구분"
+  },
+  {
+    "concept": "규제 수단의 유형 — 투입 규제, 성과 규제, 관리 규제의 차이를 이해하기 위한 비유: 투입 규제는 엄마가 정해준 공부법에 얽매인 학생, 성과 규제는 목표만 정해준 후 자율적으로 공부하는 학생, 관리 규제는 스스로 목표와 방법을 정하는 학생으로 묘사하여 각 규제의 특성을 강조.",
+    "opening": "너무 똑같은 시험 준비법에 묶인 학생이 있다면? 바로 투입 규제야. 엄마가 '소화기 10m마다 두 개'라고 정해주면, 자율성은 어디로 갔을까?",
+    "script": "투입 규제는 엄마가 정해준 공부법처럼, 선택의 여지가 없지. 성과 규제는 '95점 맞아와'라며 목표만 정해주고, 방법은 너가 상상해봐! 하지만 이 목표, 너무 높으면 도대체 누가 지킬 수 있겠어? 관리 규제는 너의 목표와 방식까지 결정하니, 완전 자유로워! 너의 능력에 맞춰 계획하고, 인증 마크도 받을 수 있지. 그래서 규제는 이렇게 다양해! 어떤 게 너에게 맞을까?",
+    "video_prompt": "A classroom filled with students studying. One student is shackled to a desk by a giant textbook labeled 'Input Regulation', struggling to keep up with absurd rules. Another student is looking up at a scoreboard that reads 'Score 95 or Else!', while a third student proudly presents a project titled 'My Own Study Plan' with a shiny certification badge. The lighting is bright and colorful, emphasizing the contrast between rigid and flexible regulations. Add humorous elements like a cartoonish clock that ticks loudly, indicating the pressure of deadlines.",
+    "memory_point": "규제는 선택의 자유와 목표 설정의 균형이 필요하다!",
+    "chapter_index": 6,
+    "chapter_title": "규제 수단: 투입 규제·성과 규제·관리 규제"
+  },
+  {
+    "concept": "기획 의도 — 직접 규제는 정부가 명령을 통해 강제하는 반면, 간접 규제는 스스로 선택하게 하는 유인 방식으로 효과성과 효율성이 다르다는 점을 강조하고자 했습니다.",
+    "opening": "행정 규제가 마치 부모님이 자녀에게 '숙제 안 해오면 용돈 줄 거야'라고 하는 상황 같아! 숙제를 하면 보상을 주고, 안 하면 벌금이 생겨!",
+    "script": "숙제를 하려면 보상이 필요하죠! 이게 바로 간접 규제입니다. 자율적으로 규제를 따르는 대신, 어기면 벌금 내야 해요. 반면, 직접 규제는 숙제가 꼭 필요해요. 안전을 위해서! 명령을 지키면 효과 높지만, 효율성은 떨어지죠. 둘 다 선택의 여지가 있지만, 소비자들은 명령을 더 믿고 따르게 됩니다. 결국, 선택의 권리는 여러분에게 있어요!",
+    "video_prompt": "A bright classroom setting with a humorous teacher using exaggerated facial expressions. The teacher mimics a strict parent, holding a piggy bank while discussing rewards and punishments. Quick cuts between students reacting to scenarios of compliance and non-compliance with amusing animations illustrating 'direct regulation' and 'indirect regulation'. Use colorful graphics to visualize the balance of effectiveness and efficiency, with playful sound effects emphasizing key points.",
+    "memory_point": "효과성은 정부, 효율성은 시장! 당신의 선택이 중요하다!",
+    "chapter_index": 7,
+    "chapter_title": "직접 규제(명령 지시)와 간접 규제(시장 유인)의 비교"
+  }
+]
