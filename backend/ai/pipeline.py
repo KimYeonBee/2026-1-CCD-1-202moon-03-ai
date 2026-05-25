@@ -39,6 +39,7 @@ import quiz_generator
 import youtube_subtitle
 import youtube_audio
 import combined_processor
+import shorts_generator
 
 # 지원 형식 정의
 YOUTUBE_PREFIXES = ("https://www.youtube.com", "https://youtu.be", "http://www.youtube.com")
@@ -273,6 +274,7 @@ def run_pipeline(
     stt_prompt          = None,
     refine              = True,   # Whisper 결과를 GPT로 교정할지 여부
     return_branches     = False,  # True면 교정 자막 / 빈칸 게임 데이터 두 브랜치를 함께 반환
+    generate_shorts     = False,  # True면 챕터별 숏폼 대본 + 영상 프롬프트 생성
 ):
     tmp_dirs = []  # 처리 완료 후 삭제할 임시 폴더 목록
 
@@ -367,6 +369,7 @@ def run_pipeline(
         chapter_segments_map = quiz_generator._map_segments_to_chapters(all_segments, chapters)
 
         all_enriched_segments = []
+        enriched_by_chapter = []  # 숏폼 생성용 챕터별 교정 세그먼트
         all_quizzes = []
         chapter_summaries = []  # [(chapter_title, chapter_summary), ...] — ai_summary 합성용
 
@@ -406,6 +409,7 @@ def run_pipeline(
 
                 all_quizzes.extend(ch_quizzes)
                 all_enriched_segments.extend(ch_enriched)
+                enriched_by_chapter.append(ch_enriched)
 
                 # 챕터 복습 요약 수집 (GPT가 빈 문자열을 줄 수도 있음 → 그땐 스킵)
                 ch_summary = (combined_result.get("chapter_summary") or "").strip()
@@ -423,16 +427,25 @@ def run_pipeline(
                 ch_enriched = keyword_extractor.extract_keywords(
                     ch_transcript, blanks_per_sentence=blanks_per_sentence
                 )
-                
+
                 ch_quizzes = quiz_generator.generate_quizzes(
                     ch_segs, chapters=[chapter]
                 )
                 for q in ch_quizzes:
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
-                
+
                 all_quizzes.extend(ch_quizzes)
                 all_enriched_segments.extend(ch_enriched)
+                enriched_by_chapter.append(ch_enriched)
+
+        # ── Step 4.5: 숏폼 대본 + 영상 프롬프트 생성 ─────────────────────────
+        shorts_data = []
+        if generate_shorts:
+            print("[TADAC] 숏폼 프롬프트 생성 시작")
+            shorts_data = shorts_generator.generate_shorts_for_chapters(
+                chapters, enriched_by_chapter, topic_summary=topic_summary,
+            )
 
         # ── Step 5-A: 교정 자막 브랜치 생성 ───────────────────────────────────
         corrected_subtitle_data = _build_corrected_subtitle_data(all_enriched_segments)
@@ -465,6 +478,9 @@ def run_pipeline(
         # ai_summary 합성 — 챕터별 복습 요약을 마크다운 목차로 합치고,
         # 챕터 요약이 비어 있으면(refine=false / 수동 자막) topic_summary 한 줄로 폴백.
         game_data["ai_summary"] = _compose_ai_summary(topic_summary, chapter_summaries)
+
+        if shorts_data:
+            game_data["shorts"] = [s for s in shorts_data if s is not None]
 
         # 파이프라인 메타데이터 추가
         game_data["stats"] = {
@@ -514,6 +530,7 @@ def run_pipeline_streaming(
     lead_time           = BASE_LEAD_TIME,
     stt_prompt          = None,
     refine              = True,
+    generate_shorts     = False,
 ):
     """
     챕터 단위 스트리밍 파이프라인 (generator).
@@ -681,6 +698,20 @@ def run_pipeline_streaming(
             total_enriched_segments.extend(ch_enriched)
             all_quizzes.extend(ch_quizzes)
 
+            # 숏폼 대본 생성 (챕터 처리 완료 후)
+            ch_shorts = None
+            if generate_shorts:
+                chapter_text = " ".join(seg.get("text", "") for seg in ch_enriched)
+                print(f"[TADAC] [스트리밍] 숏폼 생성: '{chapter['title']}'")
+                ch_shorts = shorts_generator.generate_shorts_prompt(
+                    chapter_title=chapter["title"],
+                    chapter_text=chapter_text,
+                    topic_summary=topic_summary,
+                )
+                if ch_shorts:
+                    ch_shorts["chapter_index"] = ch_idx
+                    ch_shorts["chapter_title"] = chapter["title"]
+
             # 게임 데이터 생성 (챕터 분)
             ch_game_data = blank_subtitle.build_game_data(
                 ch_enriched,
@@ -690,16 +721,19 @@ def run_pipeline_streaming(
             ch_corrected_subtitle_data = _build_corrected_subtitle_data(ch_enriched)
 
             # ── chapter_ready 이벤트 ──────────────────────────────────────────
-            yield {
+            event = {
                 "type":                "chapter_ready",
                 "chapter_index":       ch_idx,
                 "chapter_title":       chapter["title"],
-                "chapter_summary":     ch_summary,  # 복습 요약 (refine=false면 빈 문자열)
+                "chapter_summary":     ch_summary,
                 "corrected_subtitles": ch_corrected_subtitle_data.get("subtitles", []),
                 "subtitles":           ch_game_data.get("subtitles", []),
                 "fall_events":         ch_game_data.get("fall_events", []),
                 "quizzes":             ch_quizzes,
             }
+            if ch_shorts:
+                event["shorts"] = ch_shorts
+            yield event
 
         # ── complete 이벤트 ───────────────────────────────────────────────────
         yield {
@@ -736,12 +770,13 @@ def main():
     parser.add_argument("--lang",          default="ko",              help="STT 언어 코드 (기본값: ko)")
     parser.add_argument("--prompt",        default=None,              help="STT 전문 용어 힌트")
     parser.add_argument("--no-refine",     action="store_true",       help="GPT 교정 스킵 (API 비용 절약)")
+    parser.add_argument("--shorts",        action="store_true",       help="챕터별 숏폼 대본 + 영상 프롬프트 생성")
     parser.add_argument("--stream",        action="store_true",       help="스트리밍 모드 (챕터별 출력)")
     args = parser.parse_args()
 
     print(f"[TADAC] 파이프라인 시작")
     print(f"[TADAC] 소스: {args.source}")
-    print(f"[TADAC] 설정: lang={args.lang}, blanks={MAX_BLANKS_PER_SENTENCE}(고정), refine={not args.no_refine}")
+    print(f"[TADAC] 설정: lang={args.lang}, blanks={MAX_BLANKS_PER_SENTENCE}(고정), refine={not args.no_refine}, shorts={args.shorts}")
 
     if args.stream:
         # 스트리밍 모드: 챕터별로 출력
@@ -765,10 +800,11 @@ def main():
         }
         
         for event in run_pipeline_streaming(
-            source     = args.source,
-            language   = args.lang,
-            stt_prompt = args.prompt,
-            refine     = not args.no_refine,
+            source          = args.source,
+            language        = args.lang,
+            stt_prompt      = args.prompt,
+            refine          = not args.no_refine,
+            generate_shorts = args.shorts,
         ):
             print(f"\n[TADAC] === 이벤트: {event['type']} ===")
             print(json.dumps(event, ensure_ascii=False, indent=2)[:500])
@@ -813,11 +849,12 @@ def main():
     else:
         # 일괄 모드
         branch_data = run_pipeline(
-            source     = args.source,
-            language   = args.lang,
-            stt_prompt = args.prompt,
-            refine     = not args.no_refine,
+            source          = args.source,
+            language        = args.lang,
+            stt_prompt      = args.prompt,
+            refine          = not args.no_refine,
             return_branches = True,
+            generate_shorts = args.shorts,
         )
         corrected_subtitle_data = branch_data["corrected_subtitles"]
         game_data = branch_data["blank_game_data"]
