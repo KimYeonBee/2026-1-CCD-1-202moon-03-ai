@@ -65,9 +65,12 @@ def extract_audio(youtube_url, out_dir):
                 ) from e
 
         except httpx.HTTPStatusError as e:
+            try:
+                detail = e.response.read().decode()[:300]
+            except Exception:
+                detail = str(e)
             raise RuntimeError(
-                f"추출 서버 오류 (HTTP {e.response.status_code}): "
-                f"{e.response.text[:300]}"
+                f"추출 서버 오류 (HTTP {e.response.status_code}): {detail}"
             ) from e
 
         except httpx.ReadTimeout:
