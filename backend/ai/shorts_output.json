@@ -1,73 +1,241 @@
 [
   {
-    "concept": "재화 유형론을 이해하기 위해 경합성과 배제성의 개념을 극단적으로 비교하는 비유를 사용했습니다. 이는 시청자가 각 재화의 특성을 쉽게 기억하도록 도와줍니다.",
-    "opening": "상상해보세요! 경합하는 두 사람이 한 조각 케이크를 놓고 싸우는 상황. 누가 먼저 먹느냐에 따라 케이크의 크기는 줄어들고, 남은 사람은 슬퍼지죠. 바로 이게 '경합'의 본질입니다.",
-    "script": "재화에는 '경합'과 '비경합'이 있습니다. 케이크처럼 경합하는 재화는 누군가 쓰면 줄어들고, 비경합은 모두 나눠 먹어도 맛있습니다. 배제는 돈으로 해결되죠. 민간재는 시장이, 공공재는 정부가 책임져요! 공유재는 외부 불경제, 소유권이 없으니 다 함께 고갈되기만 하네요. 결국 정부 규제가 필요해요.",
-    "video_prompt": "Visualize a lively cake-eating contest between two animated characters, one trying to grab the cake while the other looks on sadly. Transition to a vibrant market scene, showing various types of goods, categorized as private, public, and shared resources. Illustrate government intervention with a humorous character dressed as a bureaucrat, waving a regulation book. Include visual gags of characters competing for resources and a pie chart showing resource allocation. Bright colors and dynamic camera angles to maintain engagement.",
-    "memory_point": "경합과 비경합, 배제와 비배제성을 기억하라! 재화의 유형을 파악하는 열쇠는 바로 정부와 시장의 역할이다.",
+    "concept": "재화 유형론의 경합성과 배제성에 대한 이해는 행정학의 핵심 개념으로, 시장 실패를 해결하기 위한 정책적 접근을 제시합니다.",
+    "opening": "재화 유형론, 간단히 정리해볼까요?",
+    "script": "재화 유형론은 경합성과 배제성의 두 축으로 재화를 분류합니다. 경합성은 자원을 사용하면 다른 사람이 사용하기 어려워지는 것이고, 배제성은 사용에 대한 비용이 발생하는 것입니다. 공유지의 비극은 무료로 사용할 수 있지만, 결국 고갈되는 상황을 말합니다. 해결책은 정부의 규제나 소유권 부여입니다.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "재화는 경합성과 배제성으로 나뉘어요. 경합하면 남이 못 써요.",
+        "video_prompt": "Visual: A classroom with a professor pointing at a blackboard filled with diagrams. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Goods can be competitive, meaning when one uses it, others cannot.\" Quirky background music. | Style: Bright saturated colors, educational tone."
+      },
+      {
+        "scene_number": 2,
+        "narration": "공유지는 무료로 사용할 수 있지만 결국 고갈됩니다.",
+        "video_prompt": "Visual: A lush green pasture with multiple people grazing sheep, but over time the grass becomes sparse. | Camera: Wide shot, slow zoom out. | Audio: Warm Korean male voiceover says: \"Shared resources are free, but they lead to depletion over time.\" Soft instrumental music. | Style: Naturalistic colors, documentary style."
+      },
+      {
+        "scene_number": 3,
+        "narration": "해결책은 정부의 규제나 소유권 부여가 필요해요.",
+        "video_prompt": "Visual: A government building with officials discussing regulations. | Camera: Medium shot, panning left to right. | Audio: Warm Korean male voiceover says: \"To prevent resource depletion, government intervention is necessary.\" Serious background music. | Style: Formal colors, realistic look."
+      },
+      {
+        "scene_number": 4,
+        "narration": "결론적으로, 자원 관리는 시장의 실패를 방지하는 핵심입니다.",
+        "video_prompt": "Visual: A balance scale with money on one side and resources on the other, tipping towards resources. | Camera: Close-up, static. | Audio: Warm Korean male voiceover says: \"Effective resource management is crucial to avoid market failure.\" Uplifting background music. | Style: Bright colors, infographic style."
+      }
+    ],
+    "memory_point": "재화 유형론의 경합성과 배제성, 공유지의 비극은 시장 실패를 해결하기 위한 핵심 개념이다.",
     "chapter_index": 0,
     "chapter_title": "재화 유형론 개요: 경합성·배제성과 4가지 재화 분류"
   },
   {
-    "concept": "재화 유형론에서 공유재의 비극을 통해 시장 실패와 정부 규제를 연결짓기 위한 비유. '공공재'와 '사익'이라는 두 개의 자전거 바퀴가 충돌하며 결국 모두가 넘어지는 상황으로 묘사하여, 이론의 복잡함을 쉽게 기억하도록 유도.",
-    "opening": "상상해보세요, 두 개의 자전거 바퀴가 '공공재'와 '사익'이라고 적혀 있습니다. 둘이 충돌하면 어떻게 될까요? 모두가 넘어진답니다!",
-    "script": "모두가 공짜인 공유재를 마구 쓰면 어떻게 될까요? 자전거 바퀴처럼 서로 충돌하며 시장이 실패하게 되죠. 이건 '공유지의 비극'이라 부르며, 결국 사익 추구가 공익을 해칩니다. 그래서 정부가 개입해야 하는데, 규제나 소유권이 필요하죠. 하딘은 소유권이 낫다고 주장하고, 오스트롬은 공동체 합의가 더 중요하다고 했어요. 결국, 부정외부효과가 발생한다는 거죠!",
-    "video_prompt": "A vibrant animation showing two bicycle wheels labeled 'Public Goods' and 'Private Interest' colliding dramatically, causing a chain reaction of chaos. As the wheels clash, scenes of people overusing resources play out, leading to a barren landscape. Transition to illustrations of government interventions: regulation and property rights, followed by a debate between two animated characters representing Hardin and Ostrom, each presenting their theories with exaggerated gestures. Bright colors and fast camera movements emphasize the urgency and humor of the situation.",
-    "memory_point": "공유재의 비극은 사익 추구가 공익을 해치며, 정부 개입이 필수적이라는 사실을 잊지 말자!",
+    "concept": "공유지의 비극을 통해 시장 실패와 정부 개입의 필요성을 이해한다.",
+    "opening": "공유지 비극, 이젠 필수 개념이야!",
+    "script": "모든 사람이 사익을 추구하면 공익이 훼손돼. 이게 바로 공유지 비극! 시장 실패가 발생하고, 정부의 개입이 필요해. 합리적인 선택이 사회적으로는 문제를 일으키지. 그래서 해결책은 규제 또는 소유권이야. 소유권을 주면 책임감이 생기고, 자원을 보호하게 돼.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "사람들이 공유지에서 자원을 과다하게 사용하는 장면입니다.",
+        "video_prompt": "Visual: 여러 사람이 국립공원에서 자원을 채취하는 모습. 한 남자가 불법으로 나무를 베고 있다. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"When everyone acts in self-interest, public goods suffer greatly.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+      },
+      {
+        "scene_number": 2,
+        "narration": "정부가 규제를 통해 공유지를 보호하려는 모습입니다.",
+        "video_prompt": "Visual: 한 정부 관료가 큰 '규제'라는 팻말을 들고 서 있다. 주변에서 사람들이 규제를 지키고 있는 모습. | Camera: Medium close-up, slow dolly in | Audio: Warm Korean male voiceover says: \"Government intervention is necessary to manage public resources effectively.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+      },
+      {
+        "scene_number": 3,
+        "narration": "소유권이 주어져 자원을 보호하는 장면입니다.",
+        "video_prompt": "Visual: 한 부족이 코끼리 보호구역을 지키는 모습. 아이들이 코끼리를 보며 기뻐하는 장면. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"When ownership is established, people take better care of resources.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+      },
+      {
+        "scene_number": 4,
+        "narration": "공동체 합의가 이루어지는 장면입니다.",
+        "video_prompt": "Visual: 사람들이 모여 회의하는 모습. 서로 의견을 나누며 웃고 있는 장면. | Camera: Medium shot, panning | Audio: Warm Korean male voiceover says: \"Community agreements can be more effective than regulations or ownership alone.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+      }
+    ],
+    "memory_point": "공유지 비극은 시장 실패로 인한 공익 훼손, 해결책은 규제와 소유권이다.",
     "chapter_index": 1,
     "chapter_title": "공유지의 비극: 시장 실패와 공익 과정설·실체설 연계"
   },
   {
-    "concept": "하딘과 오스트롬의 해결 방안을 통해 공유지 문제를 이해하기 — 공유지는 마치 만원 버스에서 자리를 차지하려는 사람들처럼, 제한된 자원에 대한 경합과 비배제가 얽혀 있어 소통과 협력이 필요하다는 것을 강조합니다.",
-    "opening": "만원 버스에서 자리를 두고 치열한 전쟁이 벌어지는 상황을 상상해보세요. 누가 먼저 자리를 차지할지, 그리고 그 자리를 지키기 위해 발버둥치는 모습이죠.",
-    "script": "하딘의 '비극'처럼, 공유지는 마치 만원 버스의 자리 싸움처럼 경합을 유발해요. 한편 오스트롬은 혜택을 나누는 방법으로 바우처를 제안하죠! 교육과 의료를 지원하는 국립학교와 병원은 마치 도시의 숨은 영웅! 소득을 얻는 길, 이걸 정부가 도와야 한다는 거죠. 결국, 우리는 함께 공존할 방법을 찾아야 해요!",
-    "video_prompt": "The scene opens in a crowded bus, with people fighting for seats, illustrating the competition for shared resources. Quick cuts to a government official present a voucher system for healthcare and education, showing citizens happily receiving vouchers. Bright colors symbolize hope and collaboration, while humorous animations depict the struggle for seats turning into a harmonious community sharing resources. The camera zooms in on smiling faces as they enjoy the benefits of public services.",
-    "memory_point": "공유지는 만원 버스처럼, 협력 없이는 모두가 손해 본다!",
+    "concept": "하딘과 오스트롬의 공유지 해결 방안을 비교하며, 정부의 역할과 바우처 시스템을 이해합니다.",
+    "opening": "공유지 문제를 해결하는 두 가지 방법, 하나는 정부의 직접적인 개입입니다.",
+    "script": "하딘은 정부가 국립병원과 학교를 세워야 한다고 주장했어요. 반면 오스트롬은 바우처를 통해 민간이 자원을 공급하게 해야 한다고 했죠. 바우처는 소비자에게 주는 쿠폰으로, 교육과 의료에서 사용됩니다. 결국, 공유지는 정부와 민간의 협력이 필요하다는 사실을 기억하세요.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "하딘은 정부가 국립병원과 학교를 세워야 한다고 주장했어요.",
+        "video_prompt": "Visual: A serious-looking professor in a suit gestures towards a chalkboard filled with diagrams of hospitals and schools. | Camera: Medium shot, static. | Audio: Warm Korean male voiceover says: \"Hardin argues for government-run hospitals and schools as solutions.\" Gentle background music. | Style: Bright colors, educational tone."
+      },
+      {
+        "scene_number": 2,
+        "narration": "오스트롬은 바우처를 통해 민간이 자원을 공급하게 하자고 했죠.",
+        "video_prompt": "Visual: A cheerful woman in casual clothes hands out vouchers to a group of happy students at a park. | Camera: Wide shot, slowly zooming in. | Audio: Warm Korean male voiceover says: \"Ostrom suggests using vouchers for private supply of resources.\" Upbeat background music. | Style: Colorful, lively atmosphere."
+      },
+      {
+        "scene_number": 3,
+        "narration": "바우처는 소비자에게 주는 쿠폰으로, 교육과 의료에서 사용됩니다.",
+        "video_prompt": "Visual: A close-up of colorful education and healthcare vouchers being exchanged between people. | Camera: Close-up, static. | Audio: Warm Korean male voiceover says: \"Vouchers are coupons given to consumers, especially in education and healthcare.\" Catchy background music. | Style: Bright and playful."
+      },
+      {
+        "scene_number": 4,
+        "narration": "결국, 공유지는 정부와 민간의 협력이 필요하다는 사실을 기억하세요.",
+        "video_prompt": "Visual: A split-screen showing a government building and a vibrant marketplace with people collaborating. | Camera: Split-screen, static. | Audio: Warm Korean male voiceover says: \"Remember, the solution to the commons problem requires both government and private cooperation.\" Inspiring background music. | Style: Motivational and dynamic."
+      }
+    ],
+    "memory_point": "공유지 문제 해결은 정부와 민간의 협력이 필수적입니다.",
     "chapter_index": 2,
     "chapter_title": "하딘과 오스트롬: 공유지 해결 방안 비교"
   },
   {
-    "concept": "재화 유형론의 복잡한 개념을 쉽게 기억하기 위해 '재화의 성격을 배우는 격투기 대회'라는 비유를 설정했다. 각 재화 유형이 대회에서 다른 방식으로 싸우는 모습으로 설명하여 잊지 못할 인상으로 남기기 위함이다.",
-    "opening": "재화의 성격을 배우는 격투기 대회에 참가한 것처럼 생각해보세요. 공공재는 심판이 없는 자유로운 경기장, 공유재는 모두가 싸우지만 한계가 있는 링을 연상시킵니다.",
-    "script": "공공재는 심판 없는 무료 경기장, 무임승차 관중이 가득해요! 공유재는 과소비 싸움터, 싸우다 과부하가 걸리죠. 반면 민간재는 경합과 배제가 있는 격투기 링, 시장이 관리합니다. 유료재는 요금 지불 필수! 고속도로처럼, 안 내면 큰 패널티가 기다리죠. 자연독점이 생기면 가격 상승과 생산량 감소, 결국 비효율성이 나타나죠. 이 모든 것이 시장 실패를 부르는 원인입니다!",
-    "video_prompt": "In a bright, dynamic fight arena, visualize a boxing ring where characters represent different types of goods. Public goods are carefree spectators enjoying an open space, while common goods are fighters battling over limited resources. Private goods are in a competitive boxing match, while toll goods are shown with a sign indicating payment required, and a referee enforcing penalties. Use comedic expressions and exaggerated movements to emphasize the chaos and competition, with quick cuts and colorful graphics to highlight the concepts.",
-    "memory_point": "재화의 성격은 싸움의 방식에 따라 다르다: 공공재는 무료, 공유재는 과소비, 민간재는 경합이다!",
+    "concept": "재화 유형론의 사례를 통해 공유지의 비극과 규제론을 이해하고 문제를 해결하는 방법을 배웁니다.",
+    "opening": "재화 유형론, 공유지의 비극, 규제론을 따져보자!",
+    "script": "사회 규제는 소비자와 노동자를 보호하는 법입니다. 공유재는 공짜로 과다하게 쓰이지만, 그 비용은 결국 누가 부담할까요? 요금재는 민간이 맡아야 하고, 집합재는 차별 없이 모두에게 제공됩니다. 이처럼 재화 유형을 파악하는 것이 중요합니다.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "사회 규제는 소비자와 노동자를 보호하는 법이야.",
+        "video_prompt": "Visual: A stern-looking government official in a suit stands in front of a crowd, holding a scale. The crowd includes workers and consumers looking worried. | Camera: Medium close-up, slow zoom in | Audio: Warm Korean male voiceover says: \"Regulations protect consumers and workers from harm.\" Soft serious background music. | Style: Realistic colors, live-action look, serious mood"
+      },
+      {
+        "scene_number": 2,
+        "narration": "공유재는 누구나 공짜로 쓰지만 문제도 생겨.",
+        "video_prompt": "Visual: A group of people fighting over a pile of free food at a park, with signs saying 'Free for All'. Some are hoarding food while others look disappointed. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"Shared resources lead to overconsumption and tragedy of the commons.\" Upbeat chaotic background music. | Style: Bright colors, comedic tone"
+      },
+      {
+        "scene_number": 3,
+        "narration": "요금재는 민간이 맡아야 해, 집합재는 모두에게 똑같이!",
+        "video_prompt": "Visual: An animated chart showing different types of goods: private goods, public goods, and common goods. Each type has a character representing it. | Camera: Medium shot, panning across the chart | Audio: Warm Korean male voiceover says: \"Private goods are efficient, but public goods require government intervention.\" Light educational background music. | Style: 2D animation, informative tone"
+      },
+      {
+        "scene_number": 4,
+        "narration": "재화 유형을 잘 이해해야 문제를 해결할 수 있어.",
+        "video_prompt": "Visual: A classroom setting with a teacher pointing at a whiteboard filled with diagrams of goods types and their characteristics. Students are taking notes. | Camera: Over-the-shoulder shot of the teacher | Audio: Warm Korean male voiceover says: \"Understanding goods types helps solve economic problems effectively.\" Calm study background music. | Style: Soft lighting, live-action look, educational mood"
+      }
+    ],
+    "memory_point": "재화 유형을 이해하지 않으면 문제를 해결할 수 없다!",
     "chapter_index": 3,
     "chapter_title": "재화 유형 사례 적용과 문제 풀이"
   },
   {
-    "concept": "재화 유형론과 시장 실패, 정부 규제의 관계를 코믹하게 정리하여 이해를 돕기 위함.",
-    "opening": "어느 날, 시장이 파티를 열었는데, 규제라는 초대장이 없으면 혼란이 벌어졌어요!",
-    "script": "시장이 파티를 여니까, 효율성과 형평성의 실패가 춤추며 난장판을 만들었어요! 규제란, 법이라는 마법의 지팡이를 들고 나타난 정부의 요정이에요. 담배를 피우는 자가 공공장소에서 불을 붙이면, 규제의 마법이 발동해요. 낚시로 강을 오염시키면, 규제가 '노 낚시!'라고 외쳐요. 법은 의회가 만드는 게 기본이지만, 행정부도 법안을 제안할 수 있어요. 하지만 규제 영향분석은 사전, 사전! 신설이나 강화할 때만 적용된답니다.",
-    "video_prompt": "A vibrant party scene representing a chaotic market with people dancing wildly. The camera zooms in on a whimsical fairy (the government) waving a magic wand (regulation) to restore order. Colorful animations depict smoke from cigarettes and polluted rivers, emphasizing the need for regulation. Transition to a serious legislative setting where a character in a suit (the administrative head) presents a bill with a big 'Pre-Analysis Required!' sign. The animation ends with a humorous reminder of the importance of prior analysis before any changes.",
-    "memory_point": "규제는 시장 실패를 막기 위한 정부의 마법, 사전 분석은 필수!",
+    "concept": "규제의 개념과 정부 개입의 필요성을 이해하기 위한 핵심 포인트를 복습합니다.",
+    "opening": "규제, 그게 왜 필요할까요?",
+    "script": "정부는 우리를 보호하기 위해 규제를 만들어요. 시장이 실패할 때, 효율성과 형평성을 지키기 위해 개입하죠. 규제는 사전 분석이 필수! 법안이 만들어지기 전에 미리 영향을 평가해야 해요. 규제는 선택이 아닌 필수입니다.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "규제는 시장 실패를 막기 위한 정부의 필수 조치입니다.",
+        "video_prompt": "Visual: A stern government official in a suit stands in front of a whiteboard filled with graphs and charts. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Regulations are essential when markets fail.\" Soft instrumental background music. | Style: Bright colors, informative tone."
+      },
+      {
+        "scene_number": 2,
+        "narration": "효율성과 형평성을 위해 정부가 개입해야 합니다.",
+        "video_prompt": "Visual: A busy marketplace with confused shoppers looking at empty shelves while a government official points at a chart showing 'market failure'. | Camera: Wide shot, dynamic panning. | Audio: Warm Korean male voiceover says: \"Government intervenes to ensure fairness and efficiency.\" Upbeat background music. | Style: Realistic animation, engaging mood."
+      },
+      {
+        "scene_number": 3,
+        "narration": "사전 분석이 규제의 성공을 좌우합니다.",
+        "video_prompt": "Visual: A group of analysts gathered around a table, discussing and analyzing data on laptops with serious expressions. | Camera: Overhead shot, slowly zooming in. | Audio: Warm Korean male voiceover says: \"Pre-analysis is crucial before implementing regulations.\" Focused background music. | Style: Professional, serious tone."
+      },
+      {
+        "scene_number": 4,
+        "narration": "규제는 선택이 아닌 필수입니다.",
+        "video_prompt": "Visual: A giant 'Regulation' sign in the center of a bustling city, with people walking by, looking up in awe. | Camera: Low-angle shot, tracking up towards the sign. | Audio: Warm Korean male voiceover says: \"Regulations are not optional; they are necessary!\" Inspiring background music. | Style: Bright, motivational tone."
+      }
+    ],
+    "memory_point": "정부는 시장 실패를 막기 위해 규제를 만들고, 사전 분석이 필수입니다.",
     "chapter_index": 4,
     "chapter_title": "규제의 개념과 시장 실패·정부 개입의 근거"
   },
   {
-    "concept": "경제 규제와 사회 규제는 마치 오래된 고전 영화와 최신 블록버스터처럼, 각기 다른 시대의 산물이다.",
-    "opening": "고전 영화는 세상에 처음 등장했지만, 요즘은 블록버스터가 모든 관심을 끌죠. 경제 규제와 사회 규제도 바로 그런 싸움이에요.",
-    "script": "경제 규제는 19세기부터 시작된 효율성의 규제! 제품 생산을 위해 정보가 개입하죠. 사회 규제는 1960년대에 등장해 환경과 사람의 안전을 지키는 역할을 해요. 삼성의 반도체가 5천 개인데 수요는 만 개? 경제 규제가 개입해요. 반면, 안전과 환경이 문제라면 사회 규제가 필요하죠. 정부가 직접 규제하거나, 민간이 자율적으로 규제하는 것도 모두 중요해요.",
-    "video_prompt": "A split-screen scene showing a classic black-and-white film reel on one side labeled 'Economic Regulation' and a vibrant, colorful blockbuster movie poster on the other side labeled 'Social Regulation'. The camera zooms in on the film reel, showing scenes of factories and production lines, while the blockbuster side features clips of environmental activism and safety inspections. Add comedic elements like exaggerated reactions of people in safety gear, and a character accidentally tripping over a safety cone.",
-    "memory_point": "경제 규제는 생산의 효율성을, 사회 규제는 사람의 안전을 지킨다!",
+    "concept": "경제 규제와 사회 규제를 명확히 구분하고, 각각의 특성을 재미있고 기억에 남게 설명한다.",
+    "opening": "규제의 세계에 오신 것을 환영합니다!",
+    "script": "경제 규제는 시장에 재화 생산을 촉진하는 정부의 개입으로, 사회 규제는 사람과 환경을 보호하기 위한 규제입니다. 예를 들어, 소방시설은 안전을 위한 사회 규제입니다. 반면, 생산량 조절은 경제 규제죠. 이처럼 규제는 목적에 따라 다르게 나뉘어요.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "경제 규제는 시장의 생산량을 조절하는 정부의 개입을 의미해요.",
+        "video_prompt": "Visual: A stern-looking government official in a suit standing in front of a bustling market | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"Economic regulation boosts production in the market.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
+      },
+      {
+        "scene_number": 2,
+        "narration": "사회 규제는 사람과 환경을 보호하기 위한 규제로, 안전과 관련돼요.",
+        "video_prompt": "Visual: A firefighter in gear inspecting a fire extinguisher in a classroom | Camera: Medium close-up, slow dolly in | Audio: Warm Korean male voiceover says: \"Social regulation ensures safety and protects lives and the environment.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
+      },
+      {
+        "scene_number": 3,
+        "narration": "생산량 조절은 경제 규제, 안전시설은 사회 규제로 이해해요.",
+        "video_prompt": "Visual: A factory producing goods with a large sign showing 'Production Limit' | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"Production limits are economic regulations, while safety measures are social regulations.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
+      },
+      {
+        "scene_number": 4,
+        "narration": "규제의 목적에 따라 구분하는 것이 중요해요.",
+        "video_prompt": "Visual: A split-screen showing a bustling market on one side and a safe classroom on the other | Camera: Split-screen, static | Audio: Warm Korean male voiceover says: \"Remember, regulations vary based on their purpose: economic or social.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
+      }
+    ],
+    "memory_point": "경제 규제는 생산 촉진, 사회 규제는 안전과 환경 보호를 위해 존재한다.",
     "chapter_index": 5,
     "chapter_title": "경제 규제와 사회 규제의 구분"
   },
   {
-    "concept": "규제 수단의 유형 — 투입 규제, 성과 규제, 관리 규제의 차이를 이해하기 위한 비유: 투입 규제는 엄마가 정해준 공부법에 얽매인 학생, 성과 규제는 목표만 정해준 후 자율적으로 공부하는 학생, 관리 규제는 스스로 목표와 방법을 정하는 학생으로 묘사하여 각 규제의 특성을 강조.",
-    "opening": "너무 똑같은 시험 준비법에 묶인 학생이 있다면? 바로 투입 규제야. 엄마가 '소화기 10m마다 두 개'라고 정해주면, 자율성은 어디로 갔을까?",
-    "script": "투입 규제는 엄마가 정해준 공부법처럼, 선택의 여지가 없지. 성과 규제는 '95점 맞아와'라며 목표만 정해주고, 방법은 너가 상상해봐! 하지만 이 목표, 너무 높으면 도대체 누가 지킬 수 있겠어? 관리 규제는 너의 목표와 방식까지 결정하니, 완전 자유로워! 너의 능력에 맞춰 계획하고, 인증 마크도 받을 수 있지. 그래서 규제는 이렇게 다양해! 어떤 게 너에게 맞을까?",
-    "video_prompt": "A classroom filled with students studying. One student is shackled to a desk by a giant textbook labeled 'Input Regulation', struggling to keep up with absurd rules. Another student is looking up at a scoreboard that reads 'Score 95 or Else!', while a third student proudly presents a project titled 'My Own Study Plan' with a shiny certification badge. The lighting is bright and colorful, emphasizing the contrast between rigid and flexible regulations. Add humorous elements like a cartoonish clock that ticks loudly, indicating the pressure of deadlines.",
-    "memory_point": "규제는 선택의 자유와 목표 설정의 균형이 필요하다!",
+    "concept": "행정학에서 규제 수단의 유형을 이해하고 각 규제의 특징과 효과성을 복습한다.",
+    "opening": "규제 수단에는 투입 규제, 성과 규제, 관리 규제가 있습니다.",
+    "script": "정부가 정한 성과 규제는 획일적입니다. 반면, 관리 규제는 개인이 스스로 목표를 설정하게 하여 유연성을 줍니다. 직접 규제는 강제적이며, 어기면 처벌을 받습니다. 간접 규제는 시장 유인으로, 자율적으로 이행할 수 있습니다.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "정부가 95점을 정하고 모든 학생이 따라야 하니 획일적이다.",
+        "video_prompt": "Visual: A classroom filled with students in uniforms, all looking stressed over a test score chart. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"When the government sets a standard, everyone must comply with it.\" Light, anxious background music. | Style: Bright colors, animated classroom setting, humorous tone."
+      },
+      {
+        "scene_number": 2,
+        "narration": "관리 규제는 개인이 목표를 정하게 하여 유연성을 제공합니다.",
+        "video_prompt": "Visual: A student confidently writing their own test score goal on a chalkboard, smiling. | Camera: Medium close-up, slow zoom in. | Audio: Warm Korean male voiceover says: \"In management regulation, you choose your own targets, adding flexibility to the process.\" Upbeat, encouraging background music. | Style: Cheerful colors, cartoonish style, motivational mood."
+      },
+      {
+        "scene_number": 3,
+        "narration": "직접 규제는 강제적이며 어기면 처벌받습니다.",
+        "video_prompt": "Visual: A stern teacher pointing at a clock while students look worried. | Camera: Low-angle shot, focusing on the teacher. | Audio: Warm Korean male voiceover says: \"Direct regulation enforces rules with penalties if not followed.\" Serious background music. | Style: Darker colors, realistic style, serious tone."
+      },
+      {
+        "scene_number": 4,
+        "narration": "간접 규제는 자율성이 있으나 효과성이 떨어질 수 있습니다.",
+        "video_prompt": "Visual: A student weighing options with money and a calendar, looking confused. | Camera: Medium shot, panning left to right. | Audio: Warm Korean male voiceover says: \"Indirect regulation allows choice but may reduce effectiveness if not followed.\" Light, thoughtful background music. | Style: Soft colors, thoughtful animation, reflective mood."
+      }
+    ],
+    "memory_point": "성과 규제는 정부가 정한 목표, 관리 규제는 개인이 정한 목표!",
     "chapter_index": 6,
     "chapter_title": "규제 수단: 투입 규제·성과 규제·관리 규제"
   },
   {
-    "concept": "기획 의도 — 직접 규제는 정부가 명령을 통해 강제하는 반면, 간접 규제는 스스로 선택하게 하는 유인 방식으로 효과성과 효율성이 다르다는 점을 강조하고자 했습니다.",
-    "opening": "행정 규제가 마치 부모님이 자녀에게 '숙제 안 해오면 용돈 줄 거야'라고 하는 상황 같아! 숙제를 하면 보상을 주고, 안 하면 벌금이 생겨!",
-    "script": "숙제를 하려면 보상이 필요하죠! 이게 바로 간접 규제입니다. 자율적으로 규제를 따르는 대신, 어기면 벌금 내야 해요. 반면, 직접 규제는 숙제가 꼭 필요해요. 안전을 위해서! 명령을 지키면 효과 높지만, 효율성은 떨어지죠. 둘 다 선택의 여지가 있지만, 소비자들은 명령을 더 믿고 따르게 됩니다. 결국, 선택의 권리는 여러분에게 있어요!",
-    "video_prompt": "A bright classroom setting with a humorous teacher using exaggerated facial expressions. The teacher mimics a strict parent, holding a piggy bank while discussing rewards and punishments. Quick cuts between students reacting to scenarios of compliance and non-compliance with amusing animations illustrating 'direct regulation' and 'indirect regulation'. Use colorful graphics to visualize the balance of effectiveness and efficiency, with playful sound effects emphasizing key points.",
-    "memory_point": "효과성은 정부, 효율성은 시장! 당신의 선택이 중요하다!",
+    "concept": "직접 규제와 간접 규제의 차이를 명확히 이해하고, 각 방식의 효과성을 기억하게 하는 내용.",
+    "opening": "규제의 세계로 들어가 봅시다.",
+    "script": "직접 규제는 마치 경찰이 길을 막고 지시하는 것과 같습니다. 어기면 벌금이 기다리고 있죠. 반면, 간접 규제는 자유롭게 선택하게 하면서도, 지원과 유인을 제공합니다. 지키지 않으면 돈이 나가니, 결국 선택은 당신의 몫입니다. 이 두 가지 규제 방식의 차이를 기억하세요.",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "narration": "직접 규제는 경찰이 길을 막고 지시하는 모습입니다.",
+        "video_prompt": "Visual: A stern police officer in a uniform stands in the middle of a busy road, directing cars to stop. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Direct regulation is like a police officer blocking the road and giving orders.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
+      },
+      {
+        "scene_number": 2,
+        "narration": "간접 규제는 당신이 선택할 수 있는 자유입니다.",
+        "video_prompt": "Visual: A cheerful market vendor with a big smile offers discounts to shoppers. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"Indirect regulation allows you to choose freely while offering incentives.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
+      },
+      {
+        "scene_number": 3,
+        "narration": "지키지 않으면 돈이 나가니, 결국 선택은 당신의 몫입니다.",
+        "video_prompt": "Visual: A worried shopper checks his wallet while looking at a price tag labeled 'Fine: 500,000 won'. | Camera: Medium shot, slow dolly in. | Audio: Warm Korean male voiceover says: \"If you don't comply, penalties hit your wallet, making the choice yours.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
+      },
+      {
+        "scene_number": 4,
+        "narration": "이 두 가지 규제 방식의 차이를 꼭 기억하세요.",
+        "video_prompt": "Visual: A split screen showing a police officer on one side and a market vendor on the other, both waving at the viewer. | Camera: Split-screen, static. | Audio: Warm Korean male voiceover says: \"Remember the difference between these two types of regulations clearly!\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
+      }
+    ],
+    "memory_point": "직접 규제는 경찰, 간접 규제는 시장의 유인으로 기억하자!",
     "chapter_index": 7,
     "chapter_title": "직접 규제(명령 지시)와 간접 규제(시장 유인)의 비교"
   }
