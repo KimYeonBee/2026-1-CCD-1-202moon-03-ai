@@ -54,13 +54,10 @@ async def extract_audio(req: ExtractRequest):
         cmd = [
             "yt-dlp",
             "--no-playlist",
-            "-x",
-            "--audio-format", "mp3",
-            "--audio-quality", "0",
+            "-f", "bestaudio[ext=m4a]/bestaudio/18",
             "-o", out_template,
+            "--extractor-args", "youtube:player_client=android",
         ]
-        cmd.extend(_get_cookie_args())
-        cmd.extend(["--extractor-args", "youtube:player_client=web,default"])
         cmd.append(req.url)
 
         print(f"[Extractor] 오디오 추출 시작: {req.url}")
@@ -80,10 +77,12 @@ async def extract_audio(req: ExtractRequest):
         file_size = os.path.getsize(audio_path)
         print(f"[Extractor] 추출 완료: {audio_path} ({file_size / 1024 / 1024:.1f} MB)")
 
+        ext = Path(audio_path).suffix
+        media_type = "audio/mp4" if ext == ".m4a" else "audio/mpeg"
         return FileResponse(
             path=audio_path,
-            media_type="audio/mpeg",
-            filename="audio.mp3",
+            media_type=media_type,
+            filename=f"audio{ext}",
             background=BackgroundTask(shutil.rmtree, tmp_dir, True),
         )
 
