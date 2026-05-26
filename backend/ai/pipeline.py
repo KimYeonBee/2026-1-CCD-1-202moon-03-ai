@@ -520,9 +520,6 @@ def run_pipeline(
         # 챕터 요약이 비어 있으면(refine=false / 수동 자막) topic_summary 한 줄로 폴백.
         game_data["ai_summary"] = _compose_ai_summary(topic_summary, chapter_summaries)
 
-        if shorts_data:
-            game_data["shorts"] = [s for s in shorts_data if s is not None]
-
         if thumbnail:
             game_data["thumbnail"] = thumbnail
 
@@ -546,11 +543,16 @@ def run_pipeline(
             "name_corrections": game_data["debug"]["name_corrections"],
         }
 
+        shorts_output = [s for s in shorts_data if s is not None] if shorts_data else []
+
         if return_branches:
-            return {
+            result = {
                 "corrected_subtitles": corrected_subtitle_data,
                 "blank_game_data":     game_data,
             }
+            if shorts_output:
+                result["shorts"] = shorts_output
+            return result
 
         return game_data
 
@@ -848,7 +850,8 @@ def main():
                 "blanks_per_sentence": MAX_BLANKS_PER_SENTENCE
             }
         }
-        
+        aggregated_shorts = []
+
         for event in run_pipeline_streaming(
             source          = args.source,
             language        = args.lang,
@@ -866,7 +869,7 @@ def main():
                 aggregated_blank_game_data["fall_events"].extend(event.get("fall_events", []))
                 aggregated_blank_game_data["quizzes"].extend(event.get("quizzes", []))
                 if event.get("shorts"):
-                    aggregated_blank_game_data.setdefault("shorts", []).append(event["shorts"])
+                    aggregated_shorts.append(event["shorts"])
             elif event["type"] == "init":
                 if event.get("thumbnail"):
                     aggregated_blank_game_data["thumbnail"] = event["thumbnail"]
@@ -901,6 +904,14 @@ def main():
         print(f"[TADAC] 교정 자막 저장 완료: {output_paths['corrected_subtitles'].resolve()}")
         print(f"[TADAC] 빈칸 게임 데이터 저장 완료: {output_paths['blank_game_data'].resolve()}")
 
+        if aggregated_shorts:
+            shorts_path = Path(__file__).parent / "shorts_output.json"
+            shorts_path.write_text(
+                json.dumps(aggregated_shorts, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[TADAC] 숏폼 데이터 저장 완료: {shorts_path.resolve()}")
+
     else:
         # 일괄 모드
         branch_data = run_pipeline(
@@ -926,6 +937,15 @@ def main():
 
         print(f"[TADAC] 교정 자막 저장 완료: {output_paths['corrected_subtitles'].resolve()}")
         print(f"[TADAC] 빈칸 게임 데이터 저장 완료: {output_paths['blank_game_data'].resolve()}")
+
+        if branch_data.get("shorts"):
+            shorts_path = Path(__file__).parent / "shorts_output.json"
+            shorts_path.write_text(
+                json.dumps(branch_data["shorts"], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[TADAC] 숏폼 데이터 저장 완료: {shorts_path.resolve()}")
+
         print(f"[TADAC] 결과: 세그먼트 {game_data['config']['total_segments']}개, "
               f"빈칸 {game_data['config']['total_blanks']}개, "
               f"낙하 이벤트 {len(game_data['fall_events'])}개")

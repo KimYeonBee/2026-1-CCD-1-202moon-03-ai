@@ -14,6 +14,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+MAX_SEGMENT_CHARS = 55
+MIN_SEGMENT_CHARS = 30
+
 
 # ── 쿠키 파일 경로 ───────────────────────────────────────────────────────
 COOKIES_PATH = "/app/cookies.txt"
@@ -114,9 +117,12 @@ def _convert_api_result_to_transcript(raw_data):
     # ID 재할당
     for i, seg in enumerate(deduplicated):
         seg["id"] = i
-    
+
+    deduplicated = _split_long_subtitle_segments(deduplicated)
+    deduplicated = _merge_short_subtitle_segments(deduplicated)
+
     full_text = " ".join(seg["text"] for seg in deduplicated)
-    
+
     return {
         "text": full_text,
         "words": all_words,
@@ -270,6 +276,94 @@ def _parse_timestamp(ts):
 #     단어당 (4.2-1.5)/4 = 0.675s
 #     "도파민" 1.500~2.175, "시스템이" 2.175~2.850, ...
 
+def _split_long_subtitle_segments(segments, max_chars=MAX_SEGMENT_CHARS):
+    """글자 수가 max_chars를 초과하는 자막 세그먼트를 단어 경계에서 분할."""
+    if not segments:
+        return segments
+
+    result = []
+    for seg in segments:
+        if len(seg["text"]) <= max_chars:
+            result.append(seg)
+            continue
+
+        words = seg["text"].split()
+        if not words:
+            result.append(seg)
+            continue
+
+        duration = seg["end"] - seg["start"]
+        total_words = len(words)
+
+        parts = []
+        current_words = []
+        for w in words:
+            candidate = " ".join(current_words + [w]) if current_words else w
+            if len(candidate) > max_chars and current_words:
+                parts.append(current_words)
+                current_words = [w]
+            else:
+                current_words.append(w)
+        if current_words:
+            parts.append(current_words)
+
+        w_offset = 0
+        for part_words in parts:
+            part_text = " ".join(part_words)
+            n = len(part_words)
+            p_start = seg["start"] + duration * (w_offset / total_words)
+            p_end = seg["start"] + duration * ((w_offset + n) / total_words)
+            result.append({
+                "id": 0,
+                "start": round(p_start, 3),
+                "end": round(p_end, 3),
+                "text": part_text,
+            })
+            w_offset += n
+
+    for i, seg in enumerate(result):
+        seg["id"] = i
+
+    if len(result) != len(segments):
+        print(f"[TADAC] 긴 자막 세그먼트 분할: {len(segments)}개 → {len(result)}개 (max {max_chars}자)")
+
+    return result
+
+
+def _merge_short_subtitle_segments(segments, min_chars=MIN_SEGMENT_CHARS):
+    """글자 수가 min_chars 미만인 자막 세그먼트를 인접 세그먼트와 병합."""
+    if not segments:
+        return segments
+
+    result = []
+    buf = None
+
+    for seg in segments:
+        if buf is None:
+            buf = dict(seg)
+            continue
+
+        if len(buf["text"]) < min_chars:
+            buf["end"] = seg["end"]
+            buf["text"] = (buf["text"] + " " + seg["text"]).strip()
+        else:
+            result.append(buf)
+            buf = dict(seg)
+
+    if buf is not None:
+        if len(buf["text"]) < min_chars and result:
+            last = result[-1]
+            last["end"] = buf["end"]
+            last["text"] = (last["text"] + " " + buf["text"]).strip()
+        else:
+            result.append(buf)
+
+    for i, seg in enumerate(result):
+        seg["id"] = i
+
+    return result
+
+
 def _interpolate_words(phrase, start, end):
     words    = phrase.strip().split()
     if not words:
@@ -358,6 +452,9 @@ def parse_vtt(vtt_path):
         seg_id += 1
 
     print(f"[TADAC] VTT 파싱 완료: {len(segments)}개 세그먼트, {len(all_words)}개 단어")
+
+    segments = _split_long_subtitle_segments(segments)
+    segments = _merge_short_subtitle_segments(segments)
 
     return {
         "text":     " ".join(seg["text"] for seg in segments),

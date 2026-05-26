@@ -1,242 +1,122 @@
 [
   {
-    "concept": "재화 유형론의 경합성과 배제성에 대한 이해는 행정학의 핵심 개념으로, 시장 실패를 해결하기 위한 정책적 접근을 제시합니다.",
-    "opening": "재화 유형론, 간단히 정리해볼까요?",
-    "script": "재화 유형론은 경합성과 배제성의 두 축으로 재화를 분류합니다. 경합성은 자원을 사용하면 다른 사람이 사용하기 어려워지는 것이고, 배제성은 사용에 대한 비용이 발생하는 것입니다. 공유지의 비극은 무료로 사용할 수 있지만, 결국 고갈되는 상황을 말합니다. 해결책은 정부의 규제나 소유권 부여입니다.",
+    "concept": "대기의 구성과 중력의 관계를 통해 대기의 층상 구조를 이해하기 위한 복습.",
+    "opening": "대기는 지구를 감싸고 있는 기체 공기입니다.",
+    "script": "대기는 지구를 둘러싼 기체로, 중력에 의해 붙잡혀 있습니다. 공기의 78%는 질소, 21%는 산소로 이루어져 있죠. 나머지 1%는 아르곤과 이산화탄소로 구성되어 있습니다. 이로써 대기의 구성과 층상 구조를 이해할 수 있습니다.",
     "scenes": [
       {
         "scene_number": 1,
-        "narration": "재화는 경합성과 배제성으로 나뉘어요. 경합하면 남이 못 써요.",
-        "video_prompt": "Visual: A classroom with a professor pointing at a blackboard filled with diagrams. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Goods can be competitive, meaning when one uses it, others cannot.\" Quirky background music. | Style: Bright saturated colors, educational tone."
+        "narration": "대기는 지구를 감싸는 기체입니다. 중력 덕분에 공기가 붙잡혀 있죠.",
+        "video_prompt": "Visual: A giant earth surrounded by swirling clouds of colorful gases. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"The atmosphere is a blanket of gases hugging the Earth.\" Soft ambient music. | Style: Bright colors, animated style, educational tone."
       },
       {
         "scene_number": 2,
-        "narration": "공유지는 무료로 사용할 수 있지만 결국 고갈됩니다.",
-        "video_prompt": "Visual: A lush green pasture with multiple people grazing sheep, but over time the grass becomes sparse. | Camera: Wide shot, slow zoom out. | Audio: Warm Korean male voiceover says: \"Shared resources are free, but they lead to depletion over time.\" Soft instrumental music. | Style: Naturalistic colors, documentary style."
+        "narration": "공기의 78%는 질소, 21%는 산소입니다. 이게 바로 우리의 대기죠.",
+        "video_prompt": "Visual: A giant nitrogen balloon (labeled 78%) floating above a smaller oxygen balloon (labeled 21%). | Camera: Medium close-up, slow zoom in | Audio: Warm Korean male voiceover says: \"Nitrogen is the king of the atmosphere with 78 percent!\" Upbeat quirky background music. | Style: Cartoonish animation, playful tone."
       },
       {
         "scene_number": 3,
-        "narration": "해결책은 정부의 규제나 소유권 부여가 필요해요.",
-        "video_prompt": "Visual: A government building with officials discussing regulations. | Camera: Medium shot, panning left to right. | Audio: Warm Korean male voiceover says: \"To prevent resource depletion, government intervention is necessary.\" Serious background music. | Style: Formal colors, realistic look."
+        "narration": "남은 1%는 아르곤과 이산화탄소로 채워져 있습니다. 소중한 비율이죠.",
+        "video_prompt": "Visual: A tiny jar labeled '1%' containing small colorful balls representing argon and carbon dioxide. | Camera: Close-up, static | Audio: Warm Korean male voiceover says: \"The remaining 1% is a rare mix of gases, making it special!\" Lighthearted background music. | Style: Minimalistic, animated style."
       },
       {
         "scene_number": 4,
-        "narration": "결론적으로, 자원 관리는 시장의 실패를 방지하는 핵심입니다.",
-        "video_prompt": "Visual: A balance scale with money on one side and resources on the other, tipping towards resources. | Camera: Close-up, static. | Audio: Warm Korean male voiceover says: \"Effective resource management is crucial to avoid market failure.\" Uplifting background music. | Style: Bright colors, infographic style."
+        "narration": "이렇게 대기를 이해하면 지구의 기후도 쉽게 알 수 있습니다.",
+        "video_prompt": "Visual: A globe spinning with various weather icons (sun, clouds, rain) appearing around it. | Camera: Wide shot, slow rotation | Audio: Warm Korean male voiceover says: \"Understanding the atmosphere gives us insight into Earth's climate!\" Inspirational background music. | Style: Cinematic look, informative tone."
       }
     ],
-    "memory_point": "재화 유형론의 경합성과 배제성, 공유지의 비극은 시장 실패를 해결하기 위한 핵심 개념이다.",
+    "memory_point": "대기의 78%는 질소, 21%는 산소, 나머지 1%는 아르곤과 이산화탄소로 구성되어 있습니다.",
     "chapter_index": 0,
-    "chapter_title": "재화 유형론 개요: 경합성·배제성과 4가지 재화 분류"
+    "chapter_title": "대기의 개념과 구성"
   },
   {
-    "concept": "공유지의 비극을 통해 시장 실패와 정부 개입의 필요성을 이해한다.",
-    "opening": "공유지 비극, 이젠 필수 개념이야!",
-    "script": "모든 사람이 사익을 추구하면 공익이 훼손돼. 이게 바로 공유지 비극! 시장 실패가 발생하고, 정부의 개입이 필요해. 합리적인 선택이 사회적으로는 문제를 일으키지. 그래서 해결책은 규제 또는 소유권이야. 소유권을 주면 책임감이 생기고, 자원을 보호하게 돼.",
+    "concept": "지구 대기의 층상 구조를 이해하기 위한 기초 지식과 기온 분포에 따른 분류를 복습합니다.",
+    "opening": "대기는 마치 케이크처럼 층층이 쌓여 있습니다.",
+    "script": "지구 대기는 높이에 따라 네 개의 층으로 나뉩니다. 대류권, 성층권, 중간권, 열권. 대류권은 우리가 사는 곳으로, 약 11km까지 이어집니다. 그 위가 성층권, 중간권, 열권입니다. 기온이 높아지거나 낮아지는 방식으로 각각의 층이 형성됩니다.",
     "scenes": [
       {
         "scene_number": 1,
-        "narration": "사람들이 공유지에서 자원을 과다하게 사용하는 장면입니다.",
-        "video_prompt": "Visual: 여러 사람이 국립공원에서 자원을 채취하는 모습. 한 남자가 불법으로 나무를 베고 있다. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"When everyone acts in self-interest, public goods suffer greatly.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+        "narration": "지구 대기는 마치 층층이 쌓인 케이크처럼 나뉘어 있습니다.",
+        "video_prompt": "Visual: A giant cake with layers labeled '대류권', '성층권', '중간권', '열권' | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"The Earth's atmosphere is like a layered cake divided into sections.\" Soft whimsical music. | Style: Bright saturated colors, cartoon animation style, humorous tone"
       },
       {
         "scene_number": 2,
-        "narration": "정부가 규제를 통해 공유지를 보호하려는 모습입니다.",
-        "video_prompt": "Visual: 한 정부 관료가 큰 '규제'라는 팻말을 들고 서 있다. 주변에서 사람들이 규제를 지키고 있는 모습. | Camera: Medium close-up, slow dolly in | Audio: Warm Korean male voiceover says: \"Government intervention is necessary to manage public resources effectively.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+        "narration": "대류권은 우리가 사는 곳, 최대 11km까지 이어집니다.",
+        "video_prompt": "Visual: A bustling city skyline up to 11km high with a giant '대류권' sign hovering above | Camera: Medium close-up, slow dolly in | Audio: Warm Korean male voiceover says: \"The troposphere is where we live, reaching up to 11 kilometers high.\" Upbeat quirky background music. | Style: Bright colors, cartoon animation style, lively mood"
       },
       {
         "scene_number": 3,
-        "narration": "소유권이 주어져 자원을 보호하는 장면입니다.",
-        "video_prompt": "Visual: 한 부족이 코끼리 보호구역을 지키는 모습. 아이들이 코끼리를 보며 기뻐하는 장면. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"When ownership is established, people take better care of resources.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+        "narration": "그 위는 성층권과 중간권, 열권으로 나뉩니다.",
+        "video_prompt": "Visual: Animated layers of the atmosphere with labels popping up as they are mentioned | Camera: Wide shot, panning up | Audio: Warm Korean male voiceover says: \"Above it are the stratosphere, mesosphere, and thermosphere layers.\" Light atmospheric music. | Style: Soft colors, 2D animation style, educational tone"
       },
       {
         "scene_number": 4,
-        "narration": "공동체 합의가 이루어지는 장면입니다.",
-        "video_prompt": "Visual: 사람들이 모여 회의하는 모습. 서로 의견을 나누며 웃고 있는 장면. | Camera: Medium shot, panning | Audio: Warm Korean male voiceover says: \"Community agreements can be more effective than regulations or ownership alone.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone"
+        "narration": "기온이 높아지거나 낮아지는 방식으로 각각의 층이 형성됩니다.",
+        "video_prompt": "Visual: Thermometer graphic showing temperature changes at different atmospheric layers | Camera: Close-up, static | Audio: Warm Korean male voiceover says: \"The layers form based on how temperature changes with height.\" Calm educational background music. | Style: Clean graphics, informative tone"
       }
     ],
-    "memory_point": "공유지 비극은 시장 실패로 인한 공익 훼손, 해결책은 규제와 소유권이다.",
+    "memory_point": "대기는 높이에 따라 대류권, 성층권, 중간권, 열권으로 나뉜다.",
     "chapter_index": 1,
-    "chapter_title": "공유지의 비극: 시장 실패와 공익 과정설·실체설 연계"
+    "chapter_title": "대기의 층상 구조 개요"
   },
   {
-    "concept": "하딘과 오스트롬의 공유지 해결 방안을 비교하며, 정부의 역할과 바우처 시스템을 이해합니다.",
-    "opening": "공유지 문제를 해결하는 두 가지 방법, 하나는 정부의 직접적인 개입입니다.",
-    "script": "하딘은 정부가 국립병원과 학교를 세워야 한다고 주장했어요. 반면 오스트롬은 바우처를 통해 민간이 자원을 공급하게 해야 한다고 했죠. 바우처는 소비자에게 주는 쿠폰으로, 교육과 의료에서 사용됩니다. 결국, 공유지는 정부와 민간의 협력이 필요하다는 사실을 기억하세요.",
+    "concept": "대기의 층상 구조와 기온 변화는 태양 에너지의 영향을 받는다. 기온의 상승과 하강은 대기의 밀도와 오존층의 역할로 설명된다.",
+    "opening": "대기의 기온 변화, 그 원인은 태양과 오존이다.",
+    "script": "기온은 지구 표면에서 시작해 위로 올라갈수록 점점 낮아진다. 하지만, 성층권에 있는 오존층 덕분에 자외선을 차단해 지구를 보호한다. 그래서 기온 변화가 생기는 거야.",
     "scenes": [
       {
         "scene_number": 1,
-        "narration": "하딘은 정부가 국립병원과 학교를 세워야 한다고 주장했어요.",
-        "video_prompt": "Visual: A serious-looking professor in a suit gestures towards a chalkboard filled with diagrams of hospitals and schools. | Camera: Medium shot, static. | Audio: Warm Korean male voiceover says: \"Hardin argues for government-run hospitals and schools as solutions.\" Gentle background music. | Style: Bright colors, educational tone."
+        "narration": "기온은 지표면에서 높고 위로 갈수록 낮아진다, 왜일까?",
+        "video_prompt": "Visual: A cartoon Earth with a thermometer showing temperature drop as we move upward. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Temperature starts high at the surface and drops as we rise up.\" Light scientific music. | Style: Bright colors, animated style, educational tone."
       },
       {
         "scene_number": 2,
-        "narration": "오스트롬은 바우처를 통해 민간이 자원을 공급하게 하자고 했죠.",
-        "video_prompt": "Visual: A cheerful woman in casual clothes hands out vouchers to a group of happy students at a park. | Camera: Wide shot, slowly zooming in. | Audio: Warm Korean male voiceover says: \"Ostrom suggests using vouchers for private supply of resources.\" Upbeat background music. | Style: Colorful, lively atmosphere."
+        "narration": "산 꼭대기에 눈이 쌓이는 이유는 기온이 낮아지기 때문이다.",
+        "video_prompt": "Visual: A cartoon mountain with snow on the peak, while below is a sunny green valley. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"Snow on mountain peaks shows how temperature decreases with altitude.\" Upbeat background music. | Style: Vibrant colors, playful animation, informative mood."
       },
       {
         "scene_number": 3,
-        "narration": "바우처는 소비자에게 주는 쿠폰으로, 교육과 의료에서 사용됩니다.",
-        "video_prompt": "Visual: A close-up of colorful education and healthcare vouchers being exchanged between people. | Camera: Close-up, static. | Audio: Warm Korean male voiceover says: \"Vouchers are coupons given to consumers, especially in education and healthcare.\" Catchy background music. | Style: Bright and playful."
+        "narration": "그럼 왜 성층권에서 기온이 올라갈까? 오존 덕분이야!",
+        "video_prompt": "Visual: A giant cartoon ozone molecule with three oxygen atoms smiling, blocking harmful rays from the sun. | Camera: Close-up, slow zoom in. | Audio: Warm Korean male voiceover says: \"Ozone absorbs harmful UV rays, warming the stratosphere!\" Light and cheerful background music. | Style: Colorful animation, fun and educational tone."
       },
       {
         "scene_number": 4,
-        "narration": "결국, 공유지는 정부와 민간의 협력이 필요하다는 사실을 기억하세요.",
-        "video_prompt": "Visual: A split-screen showing a government building and a vibrant marketplace with people collaborating. | Camera: Split-screen, static. | Audio: Warm Korean male voiceover says: \"Remember, the solution to the commons problem requires both government and private cooperation.\" Inspiring background music. | Style: Motivational and dynamic."
+        "narration": "오존층이 없었다면 지구는 생명이 살기 힘든 곳이었을 거야.",
+        "video_prompt": "Visual: A barren, lifeless Earth without an ozone layer contrasted with a vibrant Earth with life. | Camera: Wide shot, panning across both scenes. | Audio: Warm Korean male voiceover says: \"Without ozone, Earth would be lifeless, but it allows life to thrive!\" Dramatic and uplifting music. | Style: Contrast in colors, cinematic animation, impactful mood."
       }
     ],
-    "memory_point": "공유지 문제 해결은 정부와 민간의 협력이 필수적입니다.",
+    "memory_point": "기온은 지표면에서 높고, 위로 올라갈수록 낮아진다; 오존층이 기온을 변화시킨다.",
     "chapter_index": 2,
-    "chapter_title": "하딘과 오스트롬: 공유지 해결 방안 비교"
+    "chapter_title": "기온 변화와 태양 에너지의 영향"
   },
   {
-    "concept": "재화 유형론의 사례를 통해 공유지의 비극과 규제론을 이해하고 문제를 해결하는 방법을 배웁니다.",
-    "opening": "재화 유형론, 공유지의 비극, 규제론을 따져보자!",
-    "script": "사회 규제는 소비자와 노동자를 보호하는 법입니다. 공유재는 공짜로 과다하게 쓰이지만, 그 비용은 결국 누가 부담할까요? 요금재는 민간이 맡아야 하고, 집합재는 차별 없이 모두에게 제공됩니다. 이처럼 재화 유형을 파악하는 것이 중요합니다.",
+    "concept": "대기의 층상 구조와 각 층의 특징을 통해 기온 변화의 원리를 기억하게 한다.",
+    "opening": "대기의 각 층, 그 속의 비밀이 궁금하신가요?",
+    "script": "대기층은 마치 케이크처럼 층이 나뉘어져 있어요. 대류권은 수증기가 가득해 기온이 내려가고, 성층권은 오존으로 보호받아 공기가 안정돼요. 중간권은 온도가 다시 떨어지며, 열권은 태양에 가까워져 뜨겁죠. 이런 구조를 기억하세요!",
     "scenes": [
       {
         "scene_number": 1,
-        "narration": "사회 규제는 소비자와 노동자를 보호하는 법이야.",
-        "video_prompt": "Visual: A stern-looking government official in a suit stands in front of a crowd, holding a scale. The crowd includes workers and consumers looking worried. | Camera: Medium close-up, slow zoom in | Audio: Warm Korean male voiceover says: \"Regulations protect consumers and workers from harm.\" Soft serious background music. | Style: Realistic colors, live-action look, serious mood"
+        "narration": "대기층은 마치 층으로 쌓인 케이크 같아요. 아래는 촉촉하고 위로 갈수록 단단해지죠.",
+        "video_prompt": "Visual: A giant multi-layered cake with fluffy clouds at the bottom and solid layers at the top. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"The atmosphere is like a cake, soft at the bottom, solid at the top.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
       },
       {
         "scene_number": 2,
-        "narration": "공유재는 누구나 공짜로 쓰지만 문제도 생겨.",
-        "video_prompt": "Visual: A group of people fighting over a pile of free food at a park, with signs saying 'Free for All'. Some are hoarding food while others look disappointed. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"Shared resources lead to overconsumption and tragedy of the commons.\" Upbeat chaotic background music. | Style: Bright colors, comedic tone"
+        "narration": "대류권은 수증기로 가득 차 기온이 낮아지고, 성층권은 오존 덕분에 안정적이에요.",
+        "video_prompt": "Visual: A bustling water park with people splashing in the lower layers and a calm hot air balloon floating in the stable upper layer. | Camera: Medium close-up, slow dolly in. | Audio: Warm Korean male voiceover says: \"In the troposphere, water vapor lowers temperature, while the stratosphere is stable due to ozone.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
       },
       {
         "scene_number": 3,
-        "narration": "요금재는 민간이 맡아야 해, 집합재는 모두에게 똑같이!",
-        "video_prompt": "Visual: An animated chart showing different types of goods: private goods, public goods, and common goods. Each type has a character representing it. | Camera: Medium shot, panning across the chart | Audio: Warm Korean male voiceover says: \"Private goods are efficient, but public goods require government intervention.\" Light educational background music. | Style: 2D animation, informative tone"
+        "narration": "중간권은 다시 기온이 떨어지고, 열권은 태양에 가까워져 뜨거워진답니다.",
+        "video_prompt": "Visual: An adventurous astronaut getting cooler as he climbs up a mountain, only to sweat heavily near the sun, with exaggerated expressions. | Camera: Low-angle tracking shot moving up. | Audio: Warm Korean male voiceover says: \"As we rise into the mesosphere it cools down, but in the thermosphere, it gets scorching hot!\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
       },
       {
         "scene_number": 4,
-        "narration": "재화 유형을 잘 이해해야 문제를 해결할 수 있어.",
-        "video_prompt": "Visual: A classroom setting with a teacher pointing at a whiteboard filled with diagrams of goods types and their characteristics. Students are taking notes. | Camera: Over-the-shoulder shot of the teacher | Audio: Warm Korean male voiceover says: \"Understanding goods types helps solve economic problems effectively.\" Calm study background music. | Style: Soft lighting, live-action look, educational mood"
+        "narration": "이렇게 각 대기층의 특징을 기억하세요! 기온 변화의 비밀이 담겨 있답니다.",
+        "video_prompt": "Visual: A quirky map showing the different atmospheric layers with animated arrows indicating temperature changes and fun facts. | Camera: Medium shot, static. | Audio: Warm Korean male voiceover says: \"Remember the characteristics of each atmospheric layer; they hold the secrets of temperature changes!\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
       }
     ],
-    "memory_point": "재화 유형을 이해하지 않으면 문제를 해결할 수 없다!",
+    "memory_point": "대기층은 케이크처럼, 아래는 차갑고 위로 갈수록 따뜻해진다!",
     "chapter_index": 3,
-    "chapter_title": "재화 유형 사례 적용과 문제 풀이"
-  },
-  {
-    "concept": "규제의 개념과 정부 개입의 필요성을 이해하기 위한 핵심 포인트를 복습합니다.",
-    "opening": "규제, 그게 왜 필요할까요?",
-    "script": "정부는 우리를 보호하기 위해 규제를 만들어요. 시장이 실패할 때, 효율성과 형평성을 지키기 위해 개입하죠. 규제는 사전 분석이 필수! 법안이 만들어지기 전에 미리 영향을 평가해야 해요. 규제는 선택이 아닌 필수입니다.",
-    "scenes": [
-      {
-        "scene_number": 1,
-        "narration": "규제는 시장 실패를 막기 위한 정부의 필수 조치입니다.",
-        "video_prompt": "Visual: A stern government official in a suit stands in front of a whiteboard filled with graphs and charts. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Regulations are essential when markets fail.\" Soft instrumental background music. | Style: Bright colors, informative tone."
-      },
-      {
-        "scene_number": 2,
-        "narration": "효율성과 형평성을 위해 정부가 개입해야 합니다.",
-        "video_prompt": "Visual: A busy marketplace with confused shoppers looking at empty shelves while a government official points at a chart showing 'market failure'. | Camera: Wide shot, dynamic panning. | Audio: Warm Korean male voiceover says: \"Government intervenes to ensure fairness and efficiency.\" Upbeat background music. | Style: Realistic animation, engaging mood."
-      },
-      {
-        "scene_number": 3,
-        "narration": "사전 분석이 규제의 성공을 좌우합니다.",
-        "video_prompt": "Visual: A group of analysts gathered around a table, discussing and analyzing data on laptops with serious expressions. | Camera: Overhead shot, slowly zooming in. | Audio: Warm Korean male voiceover says: \"Pre-analysis is crucial before implementing regulations.\" Focused background music. | Style: Professional, serious tone."
-      },
-      {
-        "scene_number": 4,
-        "narration": "규제는 선택이 아닌 필수입니다.",
-        "video_prompt": "Visual: A giant 'Regulation' sign in the center of a bustling city, with people walking by, looking up in awe. | Camera: Low-angle shot, tracking up towards the sign. | Audio: Warm Korean male voiceover says: \"Regulations are not optional; they are necessary!\" Inspiring background music. | Style: Bright, motivational tone."
-      }
-    ],
-    "memory_point": "정부는 시장 실패를 막기 위해 규제를 만들고, 사전 분석이 필수입니다.",
-    "chapter_index": 4,
-    "chapter_title": "규제의 개념과 시장 실패·정부 개입의 근거"
-  },
-  {
-    "concept": "경제 규제와 사회 규제를 명확히 구분하고, 각각의 특성을 재미있고 기억에 남게 설명한다.",
-    "opening": "규제의 세계에 오신 것을 환영합니다!",
-    "script": "경제 규제는 시장에 재화 생산을 촉진하는 정부의 개입으로, 사회 규제는 사람과 환경을 보호하기 위한 규제입니다. 예를 들어, 소방시설은 안전을 위한 사회 규제입니다. 반면, 생산량 조절은 경제 규제죠. 이처럼 규제는 목적에 따라 다르게 나뉘어요.",
-    "scenes": [
-      {
-        "scene_number": 1,
-        "narration": "경제 규제는 시장의 생산량을 조절하는 정부의 개입을 의미해요.",
-        "video_prompt": "Visual: A stern-looking government official in a suit standing in front of a bustling market | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"Economic regulation boosts production in the market.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
-      },
-      {
-        "scene_number": 2,
-        "narration": "사회 규제는 사람과 환경을 보호하기 위한 규제로, 안전과 관련돼요.",
-        "video_prompt": "Visual: A firefighter in gear inspecting a fire extinguisher in a classroom | Camera: Medium close-up, slow dolly in | Audio: Warm Korean male voiceover says: \"Social regulation ensures safety and protects lives and the environment.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
-      },
-      {
-        "scene_number": 3,
-        "narration": "생산량 조절은 경제 규제, 안전시설은 사회 규제로 이해해요.",
-        "video_prompt": "Visual: A factory producing goods with a large sign showing 'Production Limit' | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"Production limits are economic regulations, while safety measures are social regulations.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
-      },
-      {
-        "scene_number": 4,
-        "narration": "규제의 목적에 따라 구분하는 것이 중요해요.",
-        "video_prompt": "Visual: A split-screen showing a bustling market on one side and a safe classroom on the other | Camera: Split-screen, static | Audio: Warm Korean male voiceover says: \"Remember, regulations vary based on their purpose: economic or social.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon style, educational tone"
-      }
-    ],
-    "memory_point": "경제 규제는 생산 촉진, 사회 규제는 안전과 환경 보호를 위해 존재한다.",
-    "chapter_index": 5,
-    "chapter_title": "경제 규제와 사회 규제의 구분"
-  },
-  {
-    "concept": "행정학에서 규제 수단의 유형을 이해하고 각 규제의 특징과 효과성을 복습한다.",
-    "opening": "규제 수단에는 투입 규제, 성과 규제, 관리 규제가 있습니다.",
-    "script": "정부가 정한 성과 규제는 획일적입니다. 반면, 관리 규제는 개인이 스스로 목표를 설정하게 하여 유연성을 줍니다. 직접 규제는 강제적이며, 어기면 처벌을 받습니다. 간접 규제는 시장 유인으로, 자율적으로 이행할 수 있습니다.",
-    "scenes": [
-      {
-        "scene_number": 1,
-        "narration": "정부가 95점을 정하고 모든 학생이 따라야 하니 획일적이다.",
-        "video_prompt": "Visual: A classroom filled with students in uniforms, all looking stressed over a test score chart. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"When the government sets a standard, everyone must comply with it.\" Light, anxious background music. | Style: Bright colors, animated classroom setting, humorous tone."
-      },
-      {
-        "scene_number": 2,
-        "narration": "관리 규제는 개인이 목표를 정하게 하여 유연성을 제공합니다.",
-        "video_prompt": "Visual: A student confidently writing their own test score goal on a chalkboard, smiling. | Camera: Medium close-up, slow zoom in. | Audio: Warm Korean male voiceover says: \"In management regulation, you choose your own targets, adding flexibility to the process.\" Upbeat, encouraging background music. | Style: Cheerful colors, cartoonish style, motivational mood."
-      },
-      {
-        "scene_number": 3,
-        "narration": "직접 규제는 강제적이며 어기면 처벌받습니다.",
-        "video_prompt": "Visual: A stern teacher pointing at a clock while students look worried. | Camera: Low-angle shot, focusing on the teacher. | Audio: Warm Korean male voiceover says: \"Direct regulation enforces rules with penalties if not followed.\" Serious background music. | Style: Darker colors, realistic style, serious tone."
-      },
-      {
-        "scene_number": 4,
-        "narration": "간접 규제는 자율성이 있으나 효과성이 떨어질 수 있습니다.",
-        "video_prompt": "Visual: A student weighing options with money and a calendar, looking confused. | Camera: Medium shot, panning left to right. | Audio: Warm Korean male voiceover says: \"Indirect regulation allows choice but may reduce effectiveness if not followed.\" Light, thoughtful background music. | Style: Soft colors, thoughtful animation, reflective mood."
-      }
-    ],
-    "memory_point": "성과 규제는 정부가 정한 목표, 관리 규제는 개인이 정한 목표!",
-    "chapter_index": 6,
-    "chapter_title": "규제 수단: 투입 규제·성과 규제·관리 규제"
-  },
-  {
-    "concept": "직접 규제와 간접 규제의 차이를 명확히 이해하고, 각 방식의 효과성을 기억하게 하는 내용.",
-    "opening": "규제의 세계로 들어가 봅시다.",
-    "script": "직접 규제는 마치 경찰이 길을 막고 지시하는 것과 같습니다. 어기면 벌금이 기다리고 있죠. 반면, 간접 규제는 자유롭게 선택하게 하면서도, 지원과 유인을 제공합니다. 지키지 않으면 돈이 나가니, 결국 선택은 당신의 몫입니다. 이 두 가지 규제 방식의 차이를 기억하세요.",
-    "scenes": [
-      {
-        "scene_number": 1,
-        "narration": "직접 규제는 경찰이 길을 막고 지시하는 모습입니다.",
-        "video_prompt": "Visual: A stern police officer in a uniform stands in the middle of a busy road, directing cars to stop. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Direct regulation is like a police officer blocking the road and giving orders.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
-      },
-      {
-        "scene_number": 2,
-        "narration": "간접 규제는 당신이 선택할 수 있는 자유입니다.",
-        "video_prompt": "Visual: A cheerful market vendor with a big smile offers discounts to shoppers. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"Indirect regulation allows you to choose freely while offering incentives.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
-      },
-      {
-        "scene_number": 3,
-        "narration": "지키지 않으면 돈이 나가니, 결국 선택은 당신의 몫입니다.",
-        "video_prompt": "Visual: A worried shopper checks his wallet while looking at a price tag labeled 'Fine: 500,000 won'. | Camera: Medium shot, slow dolly in. | Audio: Warm Korean male voiceover says: \"If you don't comply, penalties hit your wallet, making the choice yours.\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
-      },
-      {
-        "scene_number": 4,
-        "narration": "이 두 가지 규제 방식의 차이를 꼭 기억하세요.",
-        "video_prompt": "Visual: A split screen showing a police officer on one side and a market vendor on the other, both waving at the viewer. | Camera: Split-screen, static. | Audio: Warm Korean male voiceover says: \"Remember the difference between these two types of regulations clearly!\" Upbeat quirky background music. | Style: Bright saturated colors, 2D cartoon animation style, comedic tone."
-      }
-    ],
-    "memory_point": "직접 규제는 경찰, 간접 규제는 시장의 유인으로 기억하자!",
-    "chapter_index": 7,
-    "chapter_title": "직접 규제(명령 지시)와 간접 규제(시장 유인)의 비교"
+    "chapter_title": "각 대기층의 특징과 오존의 역할"
   }
 ]

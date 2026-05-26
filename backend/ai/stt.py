@@ -40,6 +40,8 @@ def _get_whisper_client():
 SENTENCE_END_CHARS = {".", "?", "!", "。", "?", "!"}
 
 MIN_SEGMENT_SEC = 2.5
+MAX_SEGMENT_CHARS = 55
+MIN_SEGMENT_CHARS = 30
 
 
 def _dedupe_hallucination_loops(segments, min_duration=0.1):
@@ -67,8 +69,8 @@ def _dedupe_hallucination_loops(segments, min_duration=0.1):
     return result
 
 
-def _merge_short_segments(segments, min_sec=MIN_SEGMENT_SEC):
-    """길이가 min_sec 미만인 세그먼트를 인접 세그먼트와 병합."""
+def _merge_short_segments(segments, min_chars=MIN_SEGMENT_CHARS):
+    """글자 수가 min_chars 미만인 세그먼트를 인접 세그먼트와 병합."""
     if not segments:
         return segments
 
@@ -80,7 +82,7 @@ def _merge_short_segments(segments, min_sec=MIN_SEGMENT_SEC):
             buf = dict(seg)
             continue
 
-        if (buf["end"] - buf["start"]) < min_sec:
+        if len(buf["text"]) < min_chars:
             buf["end"]  = seg["end"]
             buf["text"] = (buf["text"] + " " + seg["text"]).strip()
         else:
@@ -88,7 +90,7 @@ def _merge_short_segments(segments, min_sec=MIN_SEGMENT_SEC):
             buf = dict(seg)
 
     if buf is not None:
-        if (buf["end"] - buf["start"]) < min_sec and result:
+        if len(buf["text"]) < min_chars and result:
             last = result[-1]
             last["end"]  = buf["end"]
             last["text"] = (last["text"] + " " + buf["text"]).strip()
@@ -99,6 +101,72 @@ def _merge_short_segments(segments, min_sec=MIN_SEGMENT_SEC):
         seg["id"]    = i
         seg["start"] = round(seg["start"], 3)
         seg["end"]   = round(seg["end"],   3)
+
+    return result
+
+
+def _split_long_segments(segments, words, max_chars=MAX_SEGMENT_CHARS):
+    """글자 수가 max_chars를 초과하는 세그먼트를 단어 경계에서 분할."""
+    if not segments or not words:
+        return segments
+
+    word_idx = 0
+    result = []
+
+    for seg in segments:
+        seg_text = seg["text"]
+        if len(seg_text) <= max_chars:
+            result.append(seg)
+            word_idx += len(seg_text.split())
+            continue
+
+        seg_words_list = seg_text.split()
+        seg_word_count = len(seg_words_list)
+        part_start_word_idx = word_idx
+
+        parts = []
+        current_words = []
+        for w in seg_words_list:
+            candidate = " ".join(current_words + [w]) if current_words else w
+            if len(candidate) > max_chars and current_words:
+                parts.append(current_words)
+                current_words = [w]
+            else:
+                current_words.append(w)
+        if current_words:
+            parts.append(current_words)
+
+        w_offset = 0
+        for part_words in parts:
+            part_text = " ".join(part_words)
+            n_words = len(part_words)
+
+            abs_from = part_start_word_idx + w_offset
+            abs_to = min(abs_from + n_words - 1, len(words) - 1)
+
+            if abs_from < len(words) and abs_to < len(words):
+                p_start = words[abs_from]["start"]
+                p_end = words[abs_to]["end"]
+            else:
+                dur = seg["end"] - seg["start"]
+                p_start = seg["start"] + dur * (w_offset / seg_word_count)
+                p_end = seg["start"] + dur * ((w_offset + n_words) / seg_word_count)
+
+            result.append({
+                "id": 0,
+                "start": round(p_start, 3),
+                "end": round(p_end, 3),
+                "text": part_text,
+            })
+            w_offset += n_words
+
+        word_idx += seg_word_count
+
+    for i, seg in enumerate(result):
+        seg["id"] = i
+
+    if len(result) != len(segments):
+        print(f"[TADAC] 긴 세그먼트 분할: {len(segments)}개 → {len(result)}개 (max {max_chars}자)")
 
     return result
 
@@ -125,6 +193,11 @@ def _group_words_into_segments(words, max_gap_sec=1.5):
     for i, w in enumerate(words):
         current.append(w)
         text_stripped = w["word"].strip()
+
+        current_text = "".join(cw["word"] for cw in current).strip()
+        if len(current_text) >= MAX_SEGMENT_CHARS:
+            _flush()
+            continue
 
         if text_stripped and text_stripped[-1] in SENTENCE_END_CHARS:
             _flush()
@@ -179,10 +252,11 @@ def _run_transcribe(audio_path, language, prompt):
 
     segments = _group_words_into_segments(all_words)
     segments = _dedupe_hallucination_loops(segments)
+    segments = _split_long_segments(segments, all_words)
     before   = len(segments)
     segments = _merge_short_segments(segments)
     if before != len(segments):
-        print(f"[TADAC] 짧은 세그먼트 병합: {before}개 → {len(segments)}개 (min {MIN_SEGMENT_SEC}초)")
+        print(f"[TADAC] 짧은 세그먼트 병합: {before}개 → {len(segments)}개 (min {MIN_SEGMENT_CHARS}자)")
 
     return {
         "text":     response.text.strip(),
