@@ -865,6 +865,11 @@ def main():
                 aggregated_blank_game_data["subtitles"].extend(event.get("subtitles", []))
                 aggregated_blank_game_data["fall_events"].extend(event.get("fall_events", []))
                 aggregated_blank_game_data["quizzes"].extend(event.get("quizzes", []))
+                if event.get("shorts"):
+                    aggregated_blank_game_data.setdefault("shorts", []).append(event["shorts"])
+            elif event["type"] == "init":
+                if event.get("thumbnail"):
+                    aggregated_blank_game_data["thumbnail"] = event["thumbnail"]
             elif event["type"] == "complete":
                 stats = event.get("stats", {})
                 aggregated_corrected_subtitle_data["stats"] = stats
