@@ -31,6 +31,9 @@ load_dotenv()
 # 같은 폴더의 모듈 임포트
 sys.path.insert(0, str(Path(__file__).parent))
 
+import base64
+import subprocess
+
 import stt as stt_module
 import transcript_refiner
 import keyword_extractor
@@ -259,6 +262,41 @@ def _branch_output_paths(output_path):
     }
 
 
+# ── 썸네일 추출 ──────────────────────────────────────────────────────────────
+
+def _get_youtube_thumbnail(url):
+    """YouTube URL에서 썸네일 URL 반환 (maxresdefault → hqdefault 폴백)"""
+    video_id = youtube_subtitle._extract_video_id(url)
+    if not video_id:
+        return None
+    return f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+
+
+def _extract_local_thumbnail(video_path, tmp_dir):
+    """로컬 비디오의 첫 프레임을 추출하여 base64 data URI로 반환"""
+    thumb_path = os.path.join(tmp_dir, "thumbnail.jpg")
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-vframes", "1",
+                "-q:v", "2",
+                thumb_path,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
+            with open(thumb_path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("ascii")
+            print(f"[TADAC] 로컬 영상 썸네일 추출 완료")
+            return f"data:image/jpeg;base64,{b64}"
+    except Exception as e:
+        print(f"[TADAC] 썸네일 추출 실패 (무시): {e}")
+    return None
+
+
 # ── 메인 파이프라인 ───────────────────────────────────────────────────────────
 # Step 0: 입력 분기 → Step 1: STT → Step 1.5: 내용 분석 → Step 2: 통합 처리 → Step 3: 게임 데이터 생성
 #
@@ -282,10 +320,12 @@ def run_pipeline(
         transcript        = {}
         transcript_source = "whisper"
         content_title     = None    # 영상/파일 제목 (교정 맥락용)
+        thumbnail         = None    # 영상 썸네일 (URL 또는 base64 data URI)
 
         # ── Step 0: 입력 분기 ─────────────────────────────────────────────────
         if _is_youtube_url(source):
             print(f"[TADAC] 입력: YouTube URL")
+            thumbnail = _get_youtube_thumbnail(source)
 
             # YouTube 수동 자막 추출 시도 (자동 자막은 품질 이슈로 사용 안 함)
             transcript, transcript_source = youtube_subtitle.get_transcript_from_youtube(
@@ -320,6 +360,7 @@ def run_pipeline(
                 tmp_dir = tempfile.mkdtemp(prefix="tadac_video_")
                 tmp_dirs.append(tmp_dir)
                 audio_path = _extract_audio_from_video(source, tmp_dir)
+                thumbnail = _extract_local_thumbnail(source, tmp_dir)
             else:
                 print(f"[TADAC] 입력: 로컬 오디오 파일 ({suffix})")
 
@@ -482,6 +523,9 @@ def run_pipeline(
         if shorts_data:
             game_data["shorts"] = [s for s in shorts_data if s is not None]
 
+        if thumbnail:
+            game_data["thumbnail"] = thumbnail
+
         # 파이프라인 메타데이터 추가
         game_data["stats"] = {
             "transcript_source": transcript_source,  # "whisper" / "youtube_manual"
@@ -547,12 +591,14 @@ def run_pipeline_streaming(
         transcript        = {}
         transcript_source = "whisper"
         content_title     = None
+        thumbnail         = None
 
         # ── Phase A: 선행 작업 (전체 처리 필수) ───────────────────────────────
         # STT → 내용 분석 (챕터 경계 확정 필요)
 
         if _is_youtube_url(source):
             print(f"[TADAC] [스트리밍] 입력: YouTube URL")
+            thumbnail = _get_youtube_thumbnail(source)
 
             # YouTube 수동 자막 추출 시도 (자동 자막은 품질 이슈로 사용 안 함)
             transcript, transcript_source = youtube_subtitle.get_transcript_from_youtube(
@@ -581,6 +627,7 @@ def run_pipeline_streaming(
                 tmp_dir = tempfile.mkdtemp(prefix="tadac_video_")
                 tmp_dirs.append(tmp_dir)
                 audio_path = _extract_audio_from_video(source, tmp_dir)
+                thumbnail = _extract_local_thumbnail(source, tmp_dir)
             else:
                 print(f"[TADAC] [스트리밍] 입력: 로컬 오디오 ({suffix})")
 
@@ -626,12 +673,15 @@ def run_pipeline_streaming(
             chapters, topic_summary = transcript_refiner.analyze_chapters_only(transcript)
 
         # ── init 이벤트: 챕터 목록 전달 ───────────────────────────────────────
-        yield {
+        init_event = {
             "type":           "init",
             "total_duration": round(total_duration, 3),
             "chapters":       chapters,
             "topic_summary":  topic_summary,  # 한 줄 주제 — 프론트가 즉시 노출 가능
         }
+        if thumbnail:
+            init_event["thumbnail"] = thumbnail
+        yield init_event
 
         # ── Phase B: 챕터별 스트리밍 처리 ─────────────────────────────────────
         chapter_segments_map = quiz_generator._map_segments_to_chapters(all_segments, chapters)
