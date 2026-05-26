@@ -1,0 +1,4 @@
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch2_s1_raw.mp4'
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch2_s2_raw.mp4'
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch2_s3_raw.mp4'
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch2_s4_raw.mp4'
