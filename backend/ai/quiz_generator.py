@@ -49,17 +49,17 @@ def _get_quiz_system_prompt(questions_count):
 - 단순 암기보다 이해를 묻는 문제 우선
 - 각 문제의 options는 반드시 4개
 - answer_index는 0~3 사이 정수 (정답 선택지 번호)
+- explanation: 정답이 왜 맞는지 간결하게 해설 (1~2문장)
 - 서로 다른 내용을 묻는 {questions_count}개 문제를 만들어라
 
 출력 형식 (JSON):
 {{
   "quizzes": [
     {{
-      "question":           "질문 내용",
-      "options":            ["선택지0", "선택지1", "선택지2", "선택지3"],
-      "answer_index":       1,
-      "correct_feedback":   "정답을 맞췄을 때 보여줄 해설 및 칭찬",
-      "incorrect_feedback": "오답을 골랐을 때 보여줄 해설 및 격려"
+      "question":    "질문 내용",
+      "options":     ["선택지0", "선택지1", "선택지2", "선택지3"],
+      "answer_index": 1,
+      "explanation": "정답 해설 (1~2문장)"
     }}
   ]
 }}"""

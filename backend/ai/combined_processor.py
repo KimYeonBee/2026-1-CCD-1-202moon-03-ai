@@ -51,7 +51,7 @@ def _build_system_prompt(summary, global_keywords, questions_count):
 [작업 3] 챕터 퀴즈 생성
 - 챕터 전체 내용을 바탕으로 4지선다 퀴즈 {questions_count}개를 생성하라.
 - 정답은 반드시 지문에 근거해야 하며, 오답은 그럴듯하게 구성하라.
-- 정답 선택 시 피드백은 칭찬과 해설, 오답 선택 시 피드백은 격려와 해설을 포함하라.
+- explanation: 정답이 왜 맞는지 간결하게 해설하라 (1~2문장).
 
 [작업 4] 챕터 복습 요약 (chapter_summary)
 - 학습자가 영상을 다시 보지 않고도 이 챕터를 복습할 수 있을 정도의 분량으로 요약하라.
@@ -80,8 +80,7 @@ def _build_system_prompt(summary, global_keywords, questions_count):
       "question": "질문 내용",
       "options": ["선택지0", "선택지1", "선택지2", "선택지3"],
       "answer_index": 1,
-      "correct_feedback": "정답 해설 및 칭찬",
-      "incorrect_feedback": "오답 해설 및 격려"
+      "explanation": "정답 해설 (1~2문장)"
     }}
   ],
   "chapter_summary": "이 챕터의 핵심 내용을 정리한 복습용 요약 (3~6문장 또는 불릿 3~5개)"

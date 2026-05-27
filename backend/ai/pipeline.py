@@ -43,6 +43,7 @@ import youtube_subtitle
 import youtube_audio
 import combined_processor
 import shorts_generator
+import shorts_builder
 
 # 지원 형식 정의
 YOUTUBE_PREFIXES = ("https://www.youtube.com", "https://youtu.be", "http://www.youtube.com")
@@ -587,6 +588,18 @@ def run_pipeline(
 
         shorts_output = [s for s in shorts_data if s is not None] if shorts_data else []
 
+        # 숏폼 영상 자동 빌드 (shorts=true일 때 shorts_builder까지 자동 실행)
+        shorts_video_paths = []
+        if shorts_output:
+            print("[TADAC] 숏폼 영상 자동 빌드 시작")
+            shorts_video_dir = os.path.join(str(Path(__file__).parent), "shorts_rendered")
+            shorts_video_paths = shorts_builder.build_all_shorts_videos(
+                shorts_output, output_dir=shorts_video_dir,
+            )
+            for i, (ch_data, vpath) in enumerate(zip(shorts_output, shorts_video_paths)):
+                if vpath:
+                    ch_data["video_path"] = vpath
+
         if return_branches:
             result = {
                 "corrected_subtitles": corrected_subtitle_data,
@@ -595,6 +608,9 @@ def run_pipeline(
             if shorts_output:
                 result["shorts"] = shorts_output
             return result
+
+        if shorts_output:
+            game_data["shorts"] = shorts_output
 
         return game_data
 
@@ -792,7 +808,7 @@ def run_pipeline_streaming(
             total_enriched_segments.extend(ch_enriched)
             all_quizzes.extend(ch_quizzes)
 
-            # 숏폼 대본 생성 (챕터 처리 완료 후)
+            # 숏폼 대본 생성 + 영상 빌드 (챕터 처리 완료 후)
             ch_shorts = None
             if generate_shorts:
                 chapter_text = " ".join(seg.get("text", "") for seg in ch_enriched)
@@ -805,6 +821,14 @@ def run_pipeline_streaming(
                 if ch_shorts:
                     ch_shorts["chapter_index"] = ch_idx
                     ch_shorts["chapter_title"] = chapter["title"]
+                    # 영상 자동 빌드
+                    shorts_video_dir = os.path.join(str(Path(__file__).parent), "shorts_rendered")
+                    try:
+                        video_path = shorts_builder.build_chapter_videos(ch_shorts, output_dir=shorts_video_dir)
+                        if video_path:
+                            ch_shorts["video_path"] = video_path
+                    except Exception as e:
+                        print(f"[TADAC] [스트리밍] 챕터 {ch_idx} 영상 빌드 실패: {e}")
 
             # 게임 데이터 생성 (챕터 분)
             ch_game_data = blank_subtitle.build_game_data(
