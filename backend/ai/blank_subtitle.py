@@ -23,6 +23,7 @@ from transcript_refiner import filter_filler_keywords
 
 SHORT_SEG_THRESHOLD = 2.5    # 자막 길이(초) — 이하면 빈칸 1개로 제한
 MIN_BLANK_GAP       = 1.8    # 인접 빈칸의 발화 시점 최소 간격(초)
+MAX_KEYWORD_LEN     = 5      # 빈칸 키워드 최대 글자 수
 
 
 def _apply_density_limits(enriched_segments):
@@ -34,6 +35,15 @@ def _apply_density_limits(enriched_segments):
         original = seg.get("keywords", [])
         filtered = filter_filler_keywords(original)
         dropped_stop += len(original) - len(filtered)
+        seg["keywords"] = filtered
+
+    # 0.5단계 — 키워드 길이 제한: MAX_KEYWORD_LEN자 초과 키워드 제거
+    dropped_long = 0
+    for seg in enriched_segments:
+        original = seg.get("keywords", [])
+        filtered = [kw for kw in original
+                    if len(kw["keyword"] if isinstance(kw, dict) else kw) <= MAX_KEYWORD_LEN]
+        dropped_long += len(original) - len(filtered)
         seg["keywords"] = filtered
 
     # 1단계 — 세그먼트별 캡: 짧은 자막은 빈칸 1개만
@@ -70,8 +80,9 @@ def _apply_density_limits(enriched_segments):
         dropped_gap   += len(original) - len(filtered)
         seg["keywords"] = filtered
 
-    if dropped_stop or dropped_short or dropped_gap:
+    if dropped_stop or dropped_long or dropped_short or dropped_gap:
         print(f"[TADAC] 빈칸 밀도 제어: stopword {dropped_stop}개, "
+              f"길이초과(>{MAX_KEYWORD_LEN}자) {dropped_long}개, "
               f"짧은 세그먼트 {dropped_short}개, 최소 간격 {dropped_gap}개 제거")
 
     return enriched_segments

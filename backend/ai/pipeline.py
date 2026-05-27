@@ -201,18 +201,60 @@ def _apply_gpt_results(ch_segs, combined_result, all_words, name_corrections=Non
         if name_fixed_count > 0:
             print(f"[TADAC]   고유명사 일괄 치환: {name_fixed_count}개 세그먼트 추가 수정")
     
-    # 2. segment_keywords → keyword_map 변환
+    # 2. 교정 후 세그먼트 길이 재검증 — 55자 초과 시 분할
+    from stt import MAX_SEGMENT_CHARS, MIN_SEGMENT_CHARS
+    resplit = []
+    for seg in ch_segs:
+        text = seg.get("text", "")
+        if len(text) <= MAX_SEGMENT_CHARS:
+            resplit.append(seg)
+            continue
+        # 단어 경계에서 분할
+        words = text.split()
+        if not words:
+            resplit.append(seg)
+            continue
+        duration = seg.get("end", 0.0) - seg.get("start", 0.0)
+        total_w = len(words)
+        parts, cur = [], []
+        for w in words:
+            candidate = " ".join(cur + [w]) if cur else w
+            if len(candidate) > MAX_SEGMENT_CHARS and cur:
+                parts.append(cur)
+                cur = [w]
+            else:
+                cur.append(w)
+        if cur:
+            parts.append(cur)
+        w_off = 0
+        for pw in parts:
+            pt = " ".join(pw)
+            n = len(pw)
+            ps = seg.get("start", 0.0) + duration * (w_off / total_w)
+            pe = seg.get("start", 0.0) + duration * ((w_off + n) / total_w)
+            resplit.append({
+                "id": 0, "start": round(ps, 3), "end": round(pe, 3), "text": pt,
+            })
+            w_off += n
+    if len(resplit) != len(ch_segs):
+        print(f"[TADAC]   교정 후 재분할: {len(ch_segs)}개 → {len(resplit)}개 (max {MAX_SEGMENT_CHARS}자)")
+        for i, seg in enumerate(resplit):
+            seg["id"] = i
+        ch_segs.clear()
+        ch_segs.extend(resplit)
+
+    # 3. segment_keywords → keyword_map 변환
     keyword_map = {}
     for sk in combined_result.get("segment_keywords", []):
         if isinstance(sk, dict) and "id" in sk:
             keyword_map[sk["id"]] = sk.get("keywords", [])
-    
+
     total_keywords = sum(len(v) for v in keyword_map.values())
     print(f"[TADAC]   키워드 추출: {len(keyword_map)}개 세그먼트에서 {total_keywords}개 키워드")
-    
-    # 3. 키워드에 타임스탬프 매핑
+
+    # 4. 키워드에 타임스탬프 매핑
     enriched = keyword_extractor.enrich_segments_with_keywords(ch_segs, keyword_map, all_words)
-    
+
     return enriched
 
 

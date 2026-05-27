@@ -69,8 +69,8 @@ def _dedupe_hallucination_loops(segments, min_duration=0.1):
     return result
 
 
-def _merge_short_segments(segments, min_chars=MIN_SEGMENT_CHARS):
-    """글자 수가 min_chars 미만인 세그먼트를 인접 세그먼트와 병합."""
+def _merge_short_segments(segments, min_chars=MIN_SEGMENT_CHARS, max_chars=MAX_SEGMENT_CHARS):
+    """글자 수가 min_chars 미만인 세그먼트를 인접 세그먼트와 병합 (max_chars 초과 방지)."""
     if not segments:
         return segments
 
@@ -82,18 +82,22 @@ def _merge_short_segments(segments, min_chars=MIN_SEGMENT_CHARS):
             buf = dict(seg)
             continue
 
-        if len(buf["text"]) < min_chars:
+        merged_text = (buf["text"] + " " + seg["text"]).strip()
+        if len(buf["text"]) < min_chars and len(merged_text) <= max_chars:
             buf["end"]  = seg["end"]
-            buf["text"] = (buf["text"] + " " + seg["text"]).strip()
+            buf["text"] = merged_text
         else:
             result.append(buf)
             buf = dict(seg)
 
     if buf is not None:
         if len(buf["text"]) < min_chars and result:
-            last = result[-1]
-            last["end"]  = buf["end"]
-            last["text"] = (last["text"] + " " + buf["text"]).strip()
+            merged_text = (result[-1]["text"] + " " + buf["text"]).strip()
+            if len(merged_text) <= max_chars:
+                result[-1]["end"]  = buf["end"]
+                result[-1]["text"] = merged_text
+            else:
+                result.append(buf)
         else:
             result.append(buf)
 
@@ -107,8 +111,10 @@ def _merge_short_segments(segments, min_chars=MIN_SEGMENT_CHARS):
 
 def _split_long_segments(segments, words, max_chars=MAX_SEGMENT_CHARS):
     """글자 수가 max_chars를 초과하는 세그먼트를 단어 경계에서 분할."""
-    if not segments or not words:
+    if not segments:
         return segments
+    if not words:
+        words = []
 
     word_idx = 0
     result = []

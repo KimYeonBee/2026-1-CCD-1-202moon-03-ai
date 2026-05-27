@@ -182,6 +182,7 @@ ANALYSIS_PROMPT = """너는 강의 녹취록을 분석하는 전문가다.
   → 이 키워드들은 빈칸 문제로 출제되므로, **교육적으로 의미 있는 것만** 포함하라.
   → 학습자가 강의를 듣지 않으면 떠올릴 수 없는 단어를 우선하라.
   → 품질 > 수량. 50개를 채우려고 약한 단어를 넣지 마라. 부족하면 부족한 대로 둬라.
+  → ★ 키워드는 반드시 5글자 이하만 포함하라. 6글자 이상인 단어는 제외하라.
 
   ★ 절대 포함 금지 (filler/generic 단어):
   - 조사, 접속사, 부사, 감탄사, 일상 구어체 표현
@@ -311,6 +312,14 @@ def _analyze_content(segments, title=None):
     dropped = [kw for kw in raw_key_terms if kw not in key_terms]
     if dropped:
         print(f"[TADAC] key_terms stopword 제거 {len(dropped)}개: {', '.join(dropped)}")
+
+    # 5글자 초과 키워드 제거 — 빈칸 게임에 부적합
+    MAX_KW_LEN = 5
+    before_len_filter = key_terms[:]
+    key_terms = [kw for kw in key_terms if len(kw) <= MAX_KW_LEN]
+    dropped_long = [kw for kw in before_len_filter if len(kw) > MAX_KW_LEN]
+    if dropped_long:
+        print(f"[TADAC] key_terms 길이 초과(>{MAX_KW_LEN}자) 제거 {len(dropped_long)}개: {', '.join(dropped_long)}")
 
     terms = key_terms  # 하위 호환용 alias
     noun_corrections_list = data.get("proper_noun_corrections", [])
