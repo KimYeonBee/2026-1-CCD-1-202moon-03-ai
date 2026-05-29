@@ -20,7 +20,9 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -51,6 +53,30 @@ ALLOWED_EXTENSIONS = {".mp4", ".webm"}
 MAX_BLANKS_PER_SENTENCE = 2   # 세그먼트당 최대 빈칸 수
 BASE_FALL_SPEED         = 1.0  # 기준값. 프론트가 target_time 기반으로 재계산
 BASE_LEAD_TIME          = 3.0  # 기준값. 프론트가 target_time 기반으로 재계산
+
+YOUTUBE_PREFIXES = ("https://www.youtube.com", "https://youtu.be", "http://www.youtube.com")
+
+
+def _is_youtube_url(url: str) -> bool:
+    return url.startswith(YOUTUBE_PREFIXES)
+
+
+def _download_url_to_file(url: str, tmp_dir: str) -> str:
+    """HTTP(S) URL에서 파일을 다운로드하여 로컬 임시 경로를 반환한다."""
+    parsed = urlparse(url)
+    filename = Path(parsed.path).name or "download.mp4"
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        suffix = ".mp4"
+    dest = os.path.join(tmp_dir, f"input{suffix}")
+
+    with httpx.stream("GET", url, follow_redirects=True, timeout=300) as resp:
+        resp.raise_for_status()
+        with open(dest, "wb") as f:
+            for chunk in resp.iter_bytes(chunk_size=8192):
+                f.write(chunk)
+
+    return dest
 
 
 # ── 요청 바디 모델 ────────────────────────────────────────────────────────────
@@ -134,16 +160,22 @@ async def process_file(
 
 @app.post("/api/process-url")
 async def process_url(req: UrlRequest):
-    # YouTube URL 유효성 검사
-    if not req.url.startswith(("https://www.youtube.com", "https://youtu.be", "http://www.youtube.com")):
-        raise HTTPException(status_code=400, detail="YouTube URL만 지원합니다")
+    if not req.url.startswith("http"):
+        raise HTTPException(status_code=400, detail="유효한 URL이 아닙니다")
 
-    print(f"[TADAC] API /process-url: {req.url}")
+    is_youtube = _is_youtube_url(req.url)
+    print(f"[TADAC] API /process-url: {req.url} ({'YouTube' if is_youtube else 'Direct URL'})")
 
+    tmp_dir = None
     try:
-        # 파이프라인 실행 — 난이도 파라미터는 내부 고정값 사용
+        if is_youtube:
+            source = req.url
+        else:
+            tmp_dir = tempfile.mkdtemp(prefix="tadac_url_download_")
+            source = _download_url_to_file(req.url, tmp_dir)
+
         game_data = pipeline_module.run_pipeline(
-            source              = req.url,
+            source              = source,
             language            = req.language,
             blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
             fall_speed          = BASE_FALL_SPEED,
@@ -154,12 +186,17 @@ async def process_url(req: UrlRequest):
         )
         return game_data
 
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"URL 다운로드 실패: {e.response.status_code}")
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # ── YouTube URL 스트리밍 처리 (SSE) ───────────────────────────────────────────
@@ -172,6 +209,10 @@ async def process_url_stream(req: UrlRequest):
     """
     챕터별 스트리밍 처리 — SSE (Server-Sent Events)
 
+    YouTube URL 또는 S3 등 일반 HTTPS URL 모두 처리.
+    - YouTube URL → 파이프라인에 URL 그대로 전달
+    - 일반 URL (S3 등) → 파일 다운로드 후 로컬 경로로 파이프라인 전달
+
     이벤트 흐름:
         1. init:          챕터 목록 + 전체 정보
         2. chapter_ready: 챕터별 게임 데이터 (빈칸 자막 + 퀴즈)
@@ -179,16 +220,30 @@ async def process_url_stream(req: UrlRequest):
     """
     import json
 
-    # YouTube URL 유효성 검사
-    if not req.url.startswith(("https://www.youtube.com", "https://youtu.be", "http://www.youtube.com")):
-        raise HTTPException(status_code=400, detail="YouTube URL만 지원합니다")
+    if not req.url.startswith("http"):
+        raise HTTPException(status_code=400, detail="유효한 URL이 아닙니다")
 
-    print(f"[TADAC] API /process-url/stream: {req.url}")
+    is_youtube = _is_youtube_url(req.url)
+    print(f"[TADAC] API /process-url/stream: {req.url} ({'YouTube' if is_youtube else 'Direct URL'})")
+
+    if is_youtube:
+        source = req.url
+        tmp_dir = None
+    else:
+        tmp_dir = tempfile.mkdtemp(prefix="tadac_url_download_")
+        try:
+            source = _download_url_to_file(req.url, tmp_dir)
+        except httpx.HTTPStatusError as e:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=f"URL 다운로드 실패: {e.response.status_code}")
+        except Exception as e:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise HTTPException(status_code=500, detail=f"URL 다운로드 중 오류: {e}")
 
     def event_generator():
         try:
             for chunk in pipeline_module.run_pipeline_streaming(
-                source              = req.url,
+                source              = source,
                 language            = req.language,
                 blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
                 fall_speed          = BASE_FALL_SPEED,
@@ -201,6 +256,9 @@ async def process_url_stream(req: UrlRequest):
         except Exception as e:
             error_event = {"type": "error", "message": str(e)}
             yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        finally:
+            if tmp_dir:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return StreamingResponse(
         event_generator(),
