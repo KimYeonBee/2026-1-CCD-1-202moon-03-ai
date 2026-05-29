@@ -6,3 +6,4 @@ youtube-transcript-api>=1.0.0
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
+fal-client>=0.5.0          # fal.ai — 숏폼 영상 생성 (Veo 2)
