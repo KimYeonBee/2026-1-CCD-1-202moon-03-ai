@@ -83,11 +83,21 @@ def _call_gpt_quiz(segments, chapter_title, questions_count):
     raw = response.choices[0].message.content
     try:
         data = json.loads(raw)
+        quizzes = []
         if "quizzes" in data:
-            return data["quizzes"]
-        if "question" in data:
-            return [data]
-        return []
+            quizzes = data["quizzes"]
+        elif "question" in data:
+            quizzes = [data]
+
+        # GPT가 explanation 대신 correct_feedback 등 다른 키로 반환할 수 있으므로 정규화
+        for q in quizzes:
+            if not q.get("explanation"):
+                q["explanation"] = (
+                    q.pop("correct_feedback", "")
+                    or q.pop("incorrect_feedback", "")
+                    or ""
+                )
+        return quizzes
     except json.JSONDecodeError as e:
         print(f"[TADAC] 퀴즈 JSON 파싱 오류: {e}")
         return []
