@@ -294,6 +294,20 @@ def _compose_ai_summary(topic_summary, chapter_summaries):
     return "\n\n".join(parts)
 
 
+def _normalize_quiz(q):
+    """GPT가 explanation 대신 correct_feedback/incorrect_feedback으로 반환할 때 통일"""
+    if not q.get("explanation"):
+        q["explanation"] = (
+            q.pop("correct_feedback", "")
+            or q.pop("incorrect_feedback", "")
+            or ""
+        )
+    else:
+        q.pop("correct_feedback", None)
+        q.pop("incorrect_feedback", None)
+    return q
+
+
 def _branch_output_paths(output_path):
     """CLI -o 경로를 기준으로 두 브랜치 JSON 파일명을 만든다."""
     output_path = Path(output_path)
@@ -485,6 +499,7 @@ def run_pipeline(
                 seg_id_end = last_seg.get("id", 0)
 
                 for q in ch_quizzes:
+                    _normalize_quiz(q)
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
                     q["chapter_title"] = chapter["title"]
@@ -516,6 +531,7 @@ def run_pipeline(
                     ch_segs, chapters=[chapter]
                 )
                 for q in ch_quizzes:
+                    _normalize_quiz(q)
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
 
@@ -780,6 +796,7 @@ def run_pipeline_streaming(
                 seg_id_end = last_seg.get("id", 0)
 
                 for q in ch_quizzes:
+                    _normalize_quiz(q)
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
                     q["chapter_title"] = chapter["title"]
@@ -802,6 +819,7 @@ def run_pipeline_streaming(
 
                 ch_quizzes = quiz_generator.generate_quizzes(ch_segs, chapters=[chapter])
                 for q in ch_quizzes:
+                    _normalize_quiz(q)
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
 
