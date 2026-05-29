@@ -227,7 +227,7 @@ async def process_url_stream(req: UrlRequest):
 
     def event_generator():
         try:
-            for chunk in pipeline_module.run_pipeline_streaming(
+            for chunk in pipeline_module.run_pipeline_chunked_streaming(
                 source              = source,
                 language            = req.language,
                 blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
@@ -288,7 +288,7 @@ async def process_file_stream(req: UrlRequest):
 
     def event_generator():
         try:
-            for chunk in pipeline_module.run_pipeline_streaming(
+            for chunk in pipeline_module.run_pipeline_chunked_streaming(
                 source              = source,
                 language            = req.language,
                 blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
