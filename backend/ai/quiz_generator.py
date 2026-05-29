@@ -70,10 +70,37 @@ def _call_gpt_quiz(segments, chapter_title, questions_count):
     user_prompt   = _build_quiz_prompt(segments, chapter_title, questions_count)
     system_prompt = _get_quiz_system_prompt(questions_count)
 
+    # Structured Outputs — GPT가 반드시 explanation 필드로 반환하도록 강제
+    quiz_schema = {
+        "name": "quiz_generation",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "quizzes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question":     {"type": "string"},
+                            "options":      {"type": "array", "items": {"type": "string"}},
+                            "answer_index": {"type": "integer"},
+                            "explanation":  {"type": "string"},
+                        },
+                        "required": ["question", "options", "answer_index", "explanation"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["quizzes"],
+            "additionalProperties": False,
+        },
+    }
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         temperature=0.3,
-        response_format={"type": "json_object"},
+        response_format={"type": "json_schema", "json_schema": quiz_schema},
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
@@ -83,21 +110,7 @@ def _call_gpt_quiz(segments, chapter_title, questions_count):
     raw = response.choices[0].message.content
     try:
         data = json.loads(raw)
-        quizzes = []
-        if "quizzes" in data:
-            quizzes = data["quizzes"]
-        elif "question" in data:
-            quizzes = [data]
-
-        # GPT가 explanation 대신 correct_feedback 등 다른 키로 반환할 수 있으므로 정규화
-        for q in quizzes:
-            if not q.get("explanation"):
-                q["explanation"] = (
-                    q.pop("correct_feedback", "")
-                    or q.pop("incorrect_feedback", "")
-                    or ""
-                )
-        return quizzes
+        return data.get("quizzes", [])
     except json.JSONDecodeError as e:
         print(f"[TADAC] 퀴즈 JSON 파싱 오류: {e}")
         return []
