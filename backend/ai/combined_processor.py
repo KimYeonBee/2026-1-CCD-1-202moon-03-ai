@@ -128,12 +128,21 @@ def process_chapter_unified(chapter_segments, summary, chapter_title, blanks_per
 
             raw = response.choices[0].message.content
             data = json.loads(raw)
-            
+
             # 사용량 로그
             usage = response.usage
             if usage:
                 print(f"[TADAC] 토큰 사용량 — input: {usage.prompt_tokens}, output: {usage.completion_tokens}, total: {usage.total_tokens}")
-            
+
+            # GPT가 explanation 대신 correct_feedback 등 다른 키로 반환할 수 있으므로 정규화
+            for q in data.get("quizzes", []):
+                if not q.get("explanation"):
+                    q["explanation"] = (
+                        q.pop("correct_feedback", "")
+                        or q.pop("incorrect_feedback", "")
+                        or ""
+                    )
+
             return data
 
         except json.JSONDecodeError as e:
