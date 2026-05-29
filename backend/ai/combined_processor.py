@@ -114,12 +114,64 @@ def process_chapter_unified(chapter_segments, summary, chapter_title, blanks_per
     max_retries = 3
     base_delay = 2
 
+    # Structured Outputs 스키마 — GPT가 반드시 이 필드명으로만 반환하도록 강제
+    json_schema = {
+        "name": "chapter_processing",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "corrections": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id":   {"type": "integer"},
+                            "text": {"type": "string"},
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": False,
+                    },
+                },
+                "segment_keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id":       {"type": "integer"},
+                            "keywords": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["id", "keywords"],
+                        "additionalProperties": False,
+                    },
+                },
+                "quizzes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question":     {"type": "string"},
+                            "options":      {"type": "array", "items": {"type": "string"}},
+                            "answer_index": {"type": "integer"},
+                            "explanation":  {"type": "string"},
+                        },
+                        "required": ["question", "options", "answer_index", "explanation"],
+                        "additionalProperties": False,
+                    },
+                },
+                "chapter_summary": {"type": "string"},
+            },
+            "required": ["corrections", "segment_keywords", "quizzes", "chapter_summary"],
+            "additionalProperties": False,
+        },
+    }
+
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 temperature=0.1,
-                response_format={"type": "json_object"},
+                response_format={"type": "json_schema", "json_schema": json_schema},
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": user_prompt},
@@ -133,15 +185,6 @@ def process_chapter_unified(chapter_segments, summary, chapter_title, blanks_per
             usage = response.usage
             if usage:
                 print(f"[TADAC] 토큰 사용량 — input: {usage.prompt_tokens}, output: {usage.completion_tokens}, total: {usage.total_tokens}")
-
-            # GPT가 explanation 대신 correct_feedback 등 다른 키로 반환할 수 있으므로 정규화
-            for q in data.get("quizzes", []):
-                if not q.get("explanation"):
-                    q["explanation"] = (
-                        q.pop("correct_feedback", "")
-                        or q.pop("incorrect_feedback", "")
-                        or ""
-                    )
 
             return data
 

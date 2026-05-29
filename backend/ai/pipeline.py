@@ -296,15 +296,10 @@ def _compose_ai_summary(topic_summary, chapter_summaries):
 
 def _normalize_quiz(q):
     """GPT가 explanation 대신 correct_feedback/incorrect_feedback으로 반환할 때 통일"""
+    cf = q.pop("correct_feedback", None)
+    icf = q.pop("incorrect_feedback", None)
     if not q.get("explanation"):
-        q["explanation"] = (
-            q.pop("correct_feedback", "")
-            or q.pop("incorrect_feedback", "")
-            or ""
-        )
-    else:
-        q.pop("correct_feedback", None)
-        q.pop("incorrect_feedback", None)
+        q["explanation"] = cf or icf or ""
     return q
 
 
