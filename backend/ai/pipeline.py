@@ -1281,17 +1281,16 @@ def main():
     parser.add_argument("--prompt",        default=None,              help="STT 전문 용어 힌트")
     parser.add_argument("--no-refine",     action="store_true",       help="GPT 교정 스킵 (API 비용 절약)")
     parser.add_argument("--shorts",        action="store_true",       help="챕터별 숏폼 대본 + 영상 프롬프트 생성")
-    parser.add_argument("--stream",        action="store_true",       help="스트리밍 모드 (챕터별 출력)")
-    parser.add_argument("--chunked",       action="store_true",       help="Chunked 스트리밍 (10분 단위 STT, 첫 결과 빠름)")
+    parser.add_argument("--stream",        action="store_true",       help="스트리밍 모드 (챕터별 출력, 멀티GPU 병렬 STT)")
     args = parser.parse_args()
 
     print(f"[TADAC] 파이프라인 시작")
     print(f"[TADAC] 소스: {args.source}")
     print(f"[TADAC] 설정: lang={args.lang}, blanks={MAX_BLANKS_PER_SENTENCE}(고정), refine={not args.no_refine}, shorts={args.shorts}")
 
-    if args.chunked:
-        # Chunked 스트리밍 모드: 10분 단위 STT → 즉시 교정+키워드 → 퀴즈는 마지막
-        print("[TADAC] Chunked 스트리밍 모드")
+    if args.stream:
+        # 스트리밍 모드: 멀티GPU 병렬 STT + 챕터별 교정+키워드+퀴즈
+        print("[TADAC] 스트리밍 모드 (멀티GPU 병렬 STT)")
 
         aggregated_corrected_subtitle_data = {
             "subtitles": [],
@@ -1351,88 +1350,6 @@ def main():
         )
         print(f"[TADAC] 교정 자막 저장: {output_paths['corrected_subtitles'].resolve()}")
         print(f"[TADAC] 빈칸 게임 데이터 저장: {output_paths['blank_game_data'].resolve()}")
-
-    elif args.stream:
-        # 스트리밍 모드: 챕터별로 출력
-        print("[TADAC] 스트리밍 모드")
-        
-        aggregated_corrected_subtitle_data = {
-            "subtitles": [],
-            "config": {
-                "total_segments": 0,
-            },
-        }
-        aggregated_blank_game_data = {
-            "subtitles": [],
-            "fall_events": [],
-            "quizzes": [],
-            "config": {
-                "fall_speed": BASE_FALL_SPEED,
-                "lead_time": BASE_LEAD_TIME,
-                "blanks_per_sentence": MAX_BLANKS_PER_SENTENCE
-            }
-        }
-        aggregated_shorts = []
-
-        for event in run_pipeline_streaming(
-            source          = args.source,
-            language        = args.lang,
-            stt_prompt      = args.prompt,
-            refine          = not args.no_refine,
-            generate_shorts = args.shorts,
-        ):
-            print(f"\n[TADAC] === 이벤트: {event['type']} ===")
-            print(json.dumps(event, ensure_ascii=False, indent=2)[:500])
-            
-            # 이벤트 타입에 따라 데이터 수합
-            if event["type"] == "chapter_ready":
-                aggregated_corrected_subtitle_data["subtitles"].extend(event.get("corrected_subtitles", []))
-                aggregated_blank_game_data["subtitles"].extend(event.get("subtitles", []))
-                aggregated_blank_game_data["fall_events"].extend(event.get("fall_events", []))
-                aggregated_blank_game_data["quizzes"].extend(event.get("quizzes", []))
-                if event.get("shorts"):
-                    aggregated_shorts.append(event["shorts"])
-            elif event["type"] == "init":
-                if event.get("thumbnail"):
-                    aggregated_blank_game_data["thumbnail"] = event["thumbnail"]
-            elif event["type"] == "complete":
-                stats = event.get("stats", {})
-                aggregated_corrected_subtitle_data["stats"] = stats
-                aggregated_blank_game_data["stats"] = stats
-                aggregated_blank_game_data["ai_summary"] = event.get("ai_summary", "")
-                
-        print("[TADAC] 스트리밍 완료")
-
-        aggregated_corrected_subtitle_data["config"]["total_segments"] = len(
-            aggregated_corrected_subtitle_data["subtitles"]
-        )
-        aggregated_blank_game_data["config"]["total_segments"] = len(
-            aggregated_blank_game_data["subtitles"]
-        )
-        aggregated_blank_game_data["config"]["total_blanks"] = sum(
-            len(sub.get("blanks", [])) for sub in aggregated_blank_game_data["subtitles"]
-        )
-        
-        # 전체 데이터 합쳐서 브랜치별 파일로 저장
-        output_paths = _branch_output_paths(args.output)
-        output_paths["corrected_subtitles"].write_text(
-            json.dumps(aggregated_corrected_subtitle_data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        output_paths["blank_game_data"].write_text(
-            json.dumps(aggregated_blank_game_data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        print(f"[TADAC] 교정 자막 저장 완료: {output_paths['corrected_subtitles'].resolve()}")
-        print(f"[TADAC] 빈칸 게임 데이터 저장 완료: {output_paths['blank_game_data'].resolve()}")
-
-        if aggregated_shorts:
-            shorts_path = Path(__file__).parent / "shorts_output.json"
-            shorts_path.write_text(
-                json.dumps(aggregated_shorts, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            print(f"[TADAC] 숏폼 데이터 저장 완료: {shorts_path.resolve()}")
 
     else:
         # 일괄 모드
