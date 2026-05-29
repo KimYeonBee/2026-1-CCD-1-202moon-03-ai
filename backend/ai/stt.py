@@ -224,6 +224,117 @@ MAX_RETRIES    = 3
 RETRY_BASE_SEC = 5
 
 
+def get_gpu_status():
+    """Whisper 서버의 GPU 워커 풀 상태를 조회. 실패 시 None 반환."""
+    import httpx
+    base_url = WHISPER_API_URL.rstrip("/")
+
+    # /v1/gpu-status 먼저 시도 (프록시 환경), 실패하면 루트 시도
+    urls_to_try = [f"{base_url}/gpu-status"]
+    if base_url.endswith("/v1"):
+        root = base_url[:-3]
+        urls_to_try.append(f"{root}/gpu-status")
+
+    for url in urls_to_try:
+        try:
+            resp = httpx.get(url, timeout=5.0)
+            resp.raise_for_status()
+            data = resp.json()
+            print(f"[TADAC] GPU 상태: {data.get('total_gpus', '?')}대 중 {data.get('free_gpus', '?')}대 유휴")
+            return data
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                continue  # 다음 URL 시도
+            print(f"[TADAC] GPU 상태 조회 실패: {e}")
+            return None
+        except Exception:
+            continue
+
+    # 모든 URL 실패 → 구버전 서버로 간주
+    print(f"[TADAC] GPU 상태 엔드포인트 없음 (구버전 서버) → 단일 GPU로 처리")
+    return {"total_gpus": 1, "free_gpus": 1, "workers": []}
+
+
+def transcribe_parallel(chunk_list, language="ko", stt_prompt=None, title=None):
+    """여러 오디오 청크를 Whisper 서버의 빈 GPU에 병렬로 전송하여 STT 수행.
+
+    Args:
+        chunk_list: [(audio_path, offset_sec), ...] — 각 청크의 파일 경로와 시간 오프셋
+        language: STT 언어 코드
+        stt_prompt: STT 힌트 프롬프트
+        title: 영상 제목 (프롬프트 구성용)
+
+    Returns:
+        list of (transcript_result, offset_sec) — 각 청크의 STT 결과와 오프셋.
+        순서는 chunk_list와 동일 (offset 기준 정렬 보장).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # GPU 상태 확인하여 동시 요청 수 결정
+    gpu_status = get_gpu_status()
+    if gpu_status and gpu_status.get("total_gpus", 0) > 0:
+        max_parallel = gpu_status["total_gpus"]
+        free_gpus = gpu_status.get("free_gpus", max_parallel)
+        print(f"[TADAC] GPU 워커 풀: {max_parallel}대 총, {free_gpus}대 유휴")
+    else:
+        # 상태 조회 실패 시 순차 처리 (안전 폴백)
+        max_parallel = 1
+        print(f"[TADAC] GPU 상태 불명 → 순차 STT")
+
+    # 프롬프트 구성
+    parts = []
+    if title:
+        if language == "ko":
+            parts.append(f"이 영상은 '{title}'에 관한 강의입니다.")
+        else:
+            parts.append(f"This is a lecture about '{title}'.")
+    if stt_prompt:
+        parts.append(stt_prompt)
+    effective_prompt = " ".join(parts) if parts else None
+
+    def _stt_one(chunk_idx, audio_path, offset_sec):
+        """단일 청크 STT (스레드에서 실행)."""
+        file_size = os.path.getsize(audio_path)
+        print(f"[TADAC] STT chunk {chunk_idx+1}/{len(chunk_list)}: "
+              f"{audio_path} ({file_size / 1024 / 1024:.1f} MB, offset={offset_sec:.0f}초)")
+
+        result = _run_transcribe(audio_path, language, effective_prompt)
+        return chunk_idx, result, offset_sec
+
+    results = [None] * len(chunk_list)
+
+    # 서버가 알아서 GPU 큐잉을 해주므로, 청크를 모두 동시에 보내도 됨.
+    # 다만 max_parallel로 클라이언트 측에서도 동시 요청을 제한하여
+    # 서버 메모리 부담과 네트워크 부하를 줄임.
+    effective_parallel = min(max_parallel, len(chunk_list))
+    print(f"[TADAC] 병렬 STT 시작: {len(chunk_list)}개 청크, 동시 {effective_parallel}개")
+
+    with ThreadPoolExecutor(max_workers=effective_parallel) as executor:
+        futures = {}
+        for i, (audio_path, offset_sec) in enumerate(chunk_list):
+            future = executor.submit(_stt_one, i, audio_path, offset_sec)
+            futures[future] = i
+
+        for future in as_completed(futures):
+            try:
+                chunk_idx, result, offset_sec = future.result()
+                results[chunk_idx] = (result, offset_sec)
+                print(f"[TADAC] STT chunk {chunk_idx+1} 완료: "
+                      f"세그먼트 {len(result.get('segments', []))}개, "
+                      f"단어 {len(result.get('words', []))}개")
+            except Exception as e:
+                chunk_idx = futures[future]
+                print(f"[TADAC] STT chunk {chunk_idx+1} 실패: {e}")
+                # 실패한 청크는 빈 결과로 대체
+                results[chunk_idx] = (
+                    {"text": "", "words": [], "segments": [], "language": language},
+                    chunk_list[chunk_idx][1],
+                )
+
+    print(f"[TADAC] 병렬 STT 완료: {len(chunk_list)}개 청크 처리됨")
+    return results
+
+
 def _run_transcribe(audio_path, language, prompt):
     """학교 GPU 서버의 Whisper API를 호출하여 추론 결과를 받아오고 후처리."""
     client = _get_whisper_client()
