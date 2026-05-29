@@ -22,6 +22,7 @@ import shutil
 
 import sys
 import tempfile
+import time as _time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -60,6 +61,114 @@ BASE_LEAD_TIME          = 3.0  # 프론트가 target_time 기준으로 재계산
 def _is_youtube_url(src):
     return any(src.startswith(p) for p in YOUTUBE_PREFIXES)
 
+
+
+# ── 오디오 10분 단위 분할 ────────────────────────────────────────────────────
+CHUNK_DURATION_SEC = 600  # 10분
+
+def _split_audio_into_chunks(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
+    """오디오를 chunk_sec 단위로 분할. 반환: [(chunk_path, offset_sec), ...]"""
+    # 먼저 전체 오디오 길이 확인
+    import subprocess as _sp
+    probe = _sp.run(
+        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+        capture_output=True, text=True,
+    )
+    total_duration = float(probe.stdout.strip())
+    print(f"[TADAC] 오디오 총 길이: {total_duration:.1f}초 ({total_duration/60:.1f}분)")
+
+    if total_duration <= chunk_sec * 1.3:
+        # 분할 불필요 (chunk 1개 + 짧은 꼬리만 남을 때)
+        return [(audio_path, 0.0)]
+
+    chunks = []
+    offset = 0.0
+    idx = 0
+    while offset < total_duration:
+        chunk_path = os.path.join(tmp_dir, f"chunk_{idx:03d}.mp3")
+        _sp.run(
+            ["ffmpeg", "-y", "-i", audio_path,
+             "-ss", str(offset), "-t", str(chunk_sec),
+             "-acodec", "mp3", "-loglevel", "quiet", chunk_path],
+            check=True,
+        )
+        chunks.append((chunk_path, offset))
+        print(f"[TADAC] chunk {idx}: {offset:.0f}초~{min(offset+chunk_sec, total_duration):.0f}초")
+        offset += chunk_sec
+        idx += 1
+
+    print(f"[TADAC] 오디오 분할 완료: {len(chunks)}개 chunk")
+    return chunks
+
+
+def _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs):
+    """오디오를 자동 분할하고 멀티 GPU 병렬 STT를 수행.
+
+    - 10분 이하: 분할 없이 단일 STT
+    - 10분 초과: 10분 청크로 분할 → 빈 GPU 수만큼 병렬 전송
+
+    Args:
+        tmp_dirs: 임시 폴더 추적 리스트 (finally에서 정리용)
+
+    Returns:
+        dict: {"text": str, "words": list, "segments": list, "language": str}
+    """
+    chunk_tmp_dir = tempfile.mkdtemp(prefix="tadac_chunks_")
+    tmp_dirs.append(chunk_tmp_dir)
+    audio_chunks = _split_audio_into_chunks(audio_path, chunk_tmp_dir)
+
+    all_segments = []
+    all_words    = []
+    global_seg_id = 0
+
+    if len(audio_chunks) > 1:
+        # 멀티 GPU 병렬 STT
+        chunk_results = stt_module.transcribe_parallel(
+            audio_chunks,
+            language=language,
+            stt_prompt=stt_prompt,
+            title=content_title,
+        )
+
+        for transcript_result, offset_sec in chunk_results:
+            ch_segs  = transcript_result.get("segments", [])
+            ch_words = transcript_result.get("words", [])
+
+            if not ch_segs:
+                continue
+
+            for seg in ch_segs:
+                seg["start"] = round(seg["start"] + offset_sec, 3)
+                seg["end"]   = round(seg["end"]   + offset_sec, 3)
+                seg["id"]    = global_seg_id
+                global_seg_id += 1
+            for w in ch_words:
+                w["start"] = round(w["start"] + offset_sec, 3)
+                w["end"]   = round(w["end"]   + offset_sec, 3)
+
+            all_segments.extend(ch_segs)
+            all_words.extend(ch_words)
+    else:
+        # 단일 청크 — 분할 불필요
+        chunk_path = audio_chunks[0][0]
+        result = stt_module.transcribe(
+            chunk_path, language=language, stt_prompt=stt_prompt, title=content_title
+        )
+        ch_segs  = result.get("segments", [])
+        ch_words = result.get("words", [])
+        for seg in ch_segs:
+            seg["id"] = global_seg_id
+            global_seg_id += 1
+        all_segments.extend(ch_segs)
+        all_words.extend(ch_words)
+
+    return {
+        "text":     " ".join(seg.get("text", "") for seg in all_segments),
+        "words":    all_words,
+        "segments": all_segments,
+        "language": language,
+    }
 
 
 # ── 비디오 → 오디오 추출 (로컬 파일용) ───────────────────────────────────────
@@ -385,13 +494,12 @@ def run_pipeline(
             )
 
             if not transcript.get("segments"):
-                # 수동 자막 없음 → 오디오 추출 → Whisper STT
-                # (자동 자막은 품질이 심각하게 떨어지므로 반드시 Whisper 사용)
-                print("[TADAC] 수동 자막 없음 → 오디오 추출 후 Whisper STT로 전환")
+                # 수동 자막 없음 → 오디오 추출 → 멀티 GPU 병렬 STT
+                print("[TADAC] 수동 자막 없음 → 오디오 추출 후 멀티 GPU STT")
                 tmp_dir = tempfile.mkdtemp(prefix="tadac_yt_audio_")
                 tmp_dirs.append(tmp_dir)
                 audio_path        = youtube_audio.extract_audio(source, tmp_dir)
-                transcript        = stt_module.transcribe(audio_path, language=language, stt_prompt=stt_prompt, title=content_title)
+                transcript        = _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs)
                 transcript_source = "whisper"
 
         else:
@@ -416,7 +524,7 @@ def run_pipeline(
             else:
                 print(f"[TADAC] 입력: 로컬 오디오 파일 ({suffix})")
 
-            transcript        = stt_module.transcribe(audio_path, language=language, stt_prompt=stt_prompt, title=content_title)
+            transcript        = _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs)
             transcript_source = "whisper"
 
         if not transcript.get("segments"):
@@ -666,6 +774,7 @@ def run_pipeline_streaming(
 
         # ── Phase A: 선행 작업 (전체 처리 필수) ───────────────────────────────
         # STT → 내용 분석 (챕터 경계 확정 필요)
+        _t_pipeline_start = _time.time()
 
         if _is_youtube_url(source):
             print(f"[TADAC] [스트리밍] 입력: YouTube URL")
@@ -677,12 +786,12 @@ def run_pipeline_streaming(
             )
 
             if not transcript.get("segments"):
-                # 수동 자막 없음 → 오디오 추출 → Whisper STT
-                print("[TADAC] [스트리밍] 수동 자막 없음 → 오디오 추출 후 Whisper STT로 전환")
+                # 수동 자막 없음 → 오디오 추출 → 멀티 GPU 병렬 STT
+                print("[TADAC] [스트리밍] 수동 자막 없음 → 오디오 추출 후 멀티 GPU STT")
                 tmp_dir = tempfile.mkdtemp(prefix="tadac_yt_audio_")
                 tmp_dirs.append(tmp_dir)
                 audio_path        = youtube_audio.extract_audio(source, tmp_dir)
-                transcript        = stt_module.transcribe(audio_path, language=language, stt_prompt=stt_prompt, title=content_title)
+                transcript        = _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs)
                 transcript_source = "whisper"
         else:
             path = Path(source)
@@ -702,7 +811,7 @@ def run_pipeline_streaming(
             else:
                 print(f"[TADAC] [스트리밍] 입력: 로컬 오디오 ({suffix})")
 
-            transcript        = stt_module.transcribe(audio_path, language=language, stt_prompt=stt_prompt, title=content_title)
+            transcript        = _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs)
             transcript_source = "whisper"
 
         if not transcript.get("segments"):
@@ -711,6 +820,9 @@ def run_pipeline_streaming(
         # Whisper 원본 저장 (재처리 및 디버깅용)
         if transcript_source == "whisper":
             _save_raw_transcript(transcript)
+
+        _t_stt_done = _time.time()
+        print(f"[TADAC] ⏱ STT 완료: {_t_stt_done - _t_pipeline_start:.1f}초")
 
         all_segments = transcript.get("segments", [])
         total_duration = max(seg.get("end", 0.0) for seg in all_segments)
@@ -725,6 +837,7 @@ def run_pipeline_streaming(
 
         if transcript_source == "whisper" and refine:
             print("[TADAC] [스트리밍] Whisper → 내용 분석 + 배치 교정")
+            _t_analyze_start = _time.time()
             summary, chapters, name_corrections, global_keywords, topic_summary = transcript_refiner._analyze_content(all_segments, title=content_title)
 
             # GPT 검수 패스: key_terms를 ground truth로 추가 STT 오인식 식별
@@ -740,8 +853,12 @@ def run_pipeline_streaming(
                     print(f"  {wrong} → {correct}")
                 name_corrections.update(new_verified)
         else:
+            _t_analyze_start = _time.time()
             print("[TADAC] [스트리밍] 교정 스킵 → 챕터 분할만")
             chapters, topic_summary = transcript_refiner.analyze_chapters_only(transcript)
+
+        _t_analyze_done = _time.time()
+        print(f"[TADAC] ⏱ 내용 분석 완료: {_t_analyze_done - _t_analyze_start:.1f}초")
 
         # ── init 이벤트: 챕터 목록 전달 ───────────────────────────────────────
         init_event = {
@@ -765,6 +882,7 @@ def run_pipeline_streaming(
             if not ch_segs:
                 continue
 
+            _t_ch_start = _time.time()
             print(f"[TADAC] [스트리밍] 챕터 {ch_idx+1}/{len(chapters)}: '{chapter['title']}' 통합 처리 시작")
 
             ch_summary = ""  # 챕터 복습 요약 (refine=true 경로에서만 채워짐)
@@ -864,15 +982,276 @@ def run_pipeline_streaming(
             }
             if ch_shorts:
                 event["shorts"] = ch_shorts
+
+            print(f"[TADAC] ⏱ 챕터 {ch_idx+1} 완료: {_time.time() - _t_ch_start:.1f}초")
             yield event
 
         # ── complete 이벤트 ───────────────────────────────────────────────────
+        _t_total = _time.time() - _t_pipeline_start
+        print(f"[TADAC] ⏱ 전체 파이프라인 완료: {_t_total:.1f}초 (STT 제외 후처리: {_t_total - (_t_stt_done - _t_pipeline_start):.1f}초)")
         yield {
             "type":       "complete",
             "ai_summary": _compose_ai_summary(topic_summary, chapter_summaries),
             "stats": {
                 "transcript_source": transcript_source,
                 "total_words":       len(transcript.get("words", [])),
+                "language":          language,
+                "gpt_refined":       (transcript_source == "whisper" and refine),
+                "total_quizzes":     len(all_quizzes),
+                "total_segments":    len(total_enriched_segments),
+            },
+        }
+
+    finally:
+        for d in tmp_dirs:
+            if os.path.exists(d):
+                shutil.rmtree(d, ignore_errors=True)
+                print(f"[TADAC] 임시 폴더 삭제: {d}")
+
+
+# ── Chunked 스트리밍 파이프라인 ───────────────────────────────────────────────
+# STT만 10분 chunk로 빠르게 수행 → 전체 STT 완료 후 챕터 기반 후처리
+# 기존 run_pipeline_streaming과 동일한 이벤트 형태 (chapter_ready에 퀴즈 포함)
+
+def run_pipeline_chunked_streaming(
+    source,
+    language            = "ko",
+    blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+    fall_speed          = BASE_FALL_SPEED,
+    lead_time           = BASE_LEAD_TIME,
+    stt_prompt          = None,
+    refine              = True,
+    generate_shorts     = False,
+):
+    """
+    Chunked STT + 챕터 기반 스트리밍 파이프라인 (generator).
+
+    STT를 10분 chunk 단위로 수행하여 STT 소요 시간을 단축하고,
+    후처리는 기존과 동일하게 챕터 단위로 교정+키워드+퀴즈를 포함하여 스트리밍.
+
+    흐름:
+      1. 오디오 10분 단위 split → chunk별 STT 순차 수행
+      2. 전체 STT 합치기 → 내용 분석 + 챕터 분할
+      3. 챕터별 교정+키워드+퀴즈 → chapter_ready 즉시 스트리밍
+
+    Yields:
+        - {"type": "init", "chapters": [...], "total_duration": float}
+        - {"type": "chapter_ready", ...}  (자막 + 퀴즈 포함)
+        - {"type": "complete", "stats": {...}}
+    """
+    tmp_dirs = []
+
+    try:
+        _t_pipeline_start = _time.time()
+
+        transcript_source = "whisper"
+        content_title     = None
+        audio_path        = None
+
+        # ── Phase 0: 입력 분기 + 오디오 준비 ─────────────────────────────────
+        if _is_youtube_url(source):
+            print(f"[TADAC] [chunked] 입력: YouTube URL")
+
+            # YouTube 수동 자막 시도
+            transcript, transcript_source = youtube_subtitle.get_transcript_from_youtube(
+                source, preferred_lang=language
+            )
+
+            if transcript.get("segments"):
+                # 수동 자막 있음 → 기존 파이프라인으로 폴백
+                print("[TADAC] [chunked] 수동 자막 발견 → 기존 스트리밍으로 폴백")
+                yield from run_pipeline_streaming(
+                    source=source, language=language,
+                    blanks_per_sentence=blanks_per_sentence,
+                    fall_speed=fall_speed, lead_time=lead_time,
+                    stt_prompt=stt_prompt, refine=refine,
+                    generate_shorts=generate_shorts,
+                )
+                return
+
+            # 수동 자막 없음 → 오디오 추출
+            print("[TADAC] [chunked] 수동 자막 없음 → 오디오 추출")
+            tmp_dir = tempfile.mkdtemp(prefix="tadac_yt_audio_")
+            tmp_dirs.append(tmp_dir)
+            audio_path = youtube_audio.extract_audio(source, tmp_dir)
+
+        else:
+            path = Path(source)
+            if not path.exists():
+                raise FileNotFoundError(f"파일을 찾을 수 없음: {source}")
+
+            content_title = path.stem
+            suffix = path.suffix.lower()
+            audio_path = source
+
+            if suffix in VIDEO_EXTENSIONS:
+                print(f"[TADAC] [chunked] 입력: 로컬 비디오 ({suffix})")
+                tmp_dir = tempfile.mkdtemp(prefix="tadac_video_")
+                tmp_dirs.append(tmp_dir)
+                audio_path = _extract_audio_from_video(source, tmp_dir)
+            else:
+                print(f"[TADAC] [chunked] 입력: 로컬 오디오 ({suffix})")
+
+        # ── Phase 1: 오디오 분할 + 멀티 GPU 병렬 STT ─────────────────────────
+        full_transcript = _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs)
+        all_segments = full_transcript.get("segments", [])
+        all_words    = full_transcript.get("words", [])
+
+        if not all_segments:
+            raise ValueError("세그먼트가 없어 게임 데이터를 만들 수 없음")
+
+        _t_stt_total = _time.time() - _t_pipeline_start
+        print(f"\n[TADAC] ⏱ 전체 STT 완료: {_t_stt_total:.1f}초 (세그먼트 {len(all_segments)}개, 단어 {len(all_words)}개)")
+
+        # Whisper 원본 저장
+        _save_raw_transcript(full_transcript)
+
+        total_duration = max(seg.get("end", 0.0) for seg in all_segments)
+
+        # ── Phase 2: 내용 분석 + 챕터 분할 ───────────────────────────────────
+        # 기존 run_pipeline_streaming의 Phase A와 동일
+        chapters = None
+        summary  = None
+        topic_summary    = ""
+        name_corrections = {}
+        global_keywords  = []
+
+        if transcript_source == "whisper" and refine:
+            _t_analyze_start = _time.time()
+            print("[TADAC] [chunked] 내용 분석 + 챕터 분할")
+            summary, chapters, name_corrections, global_keywords, topic_summary = (
+                transcript_refiner._analyze_content(all_segments, title=content_title)
+            )
+
+            # GPT 검수 패스
+            verified = transcript_refiner.verify_with_key_terms(all_segments, global_keywords)
+            new_verified = {
+                w: c for w, c in verified.items()
+                if w not in name_corrections
+                and transcript_refiner._is_safe_name_correction(w, c)
+            }
+            if new_verified:
+                print(f"[TADAC] GPT 검수 패스 추가 교정: {len(new_verified)}개")
+                for wrong, correct in new_verified.items():
+                    print(f"  {wrong} → {correct}")
+                name_corrections.update(new_verified)
+
+            _t_analyze_end = _time.time()
+            print(f"[TADAC] ⏱ 내용 분석 완료: {_t_analyze_end - _t_analyze_start:.1f}초")
+        else:
+            _t_analyze_start = _time.time()
+            print("[TADAC] [chunked] 교정 스킵 → 챕터 분할만")
+            chapters, topic_summary = transcript_refiner.analyze_chapters_only(full_transcript)
+            _t_analyze_end = _time.time()
+            print(f"[TADAC] ⏱ 챕터 분할 완료: {_t_analyze_end - _t_analyze_start:.1f}초")
+
+        # ── init 이벤트: 챕터 목록 전달 ──────────────────────────────────────
+        init_event = {
+            "type":           "init",
+            "total_duration": round(total_duration, 3),
+            "chapters":       chapters,
+            "topic_summary":  topic_summary,
+        }
+        yield init_event
+
+        # ── Phase 3: 챕터별 교정+키워드+퀴즈 → 스트리밍 ──────────────────────
+        # 기존 run_pipeline_streaming의 Phase B와 동일
+        chapter_segments_map = quiz_generator._map_segments_to_chapters(all_segments, chapters)
+
+        all_quizzes = []
+        total_enriched_segments = []
+        chapter_summaries = []
+
+        for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
+            if not ch_segs:
+                continue
+
+            _t_ch_start = _time.time()
+            print(f"[TADAC] [chunked] 챕터 {ch_idx+1}/{len(chapters)}: '{chapter['title']}' 통합 처리 시작")
+
+            ch_summary = ""
+
+            if transcript_source == "whisper" and refine and summary:
+                # 3-in-1: corrections + segment_keywords + quizzes
+                combined_result = combined_processor.process_chapter_unified(
+                    ch_segs, summary, chapter["title"],
+                    blanks_per_sentence=blanks_per_sentence,
+                    global_keywords=global_keywords,
+                )
+
+                ch_enriched = _apply_gpt_results(ch_segs, combined_result, all_words, name_corrections)
+                ch_enriched = _fill_missing_keywords(ch_enriched, global_keywords, all_words)
+
+                # 퀴즈
+                ch_quizzes = combined_result.get("quizzes", [])
+                last_seg = ch_segs[-1] if ch_segs else {}
+                trigger_time = last_seg.get("end", 0.0)
+                seg_id_start = ch_segs[0].get("id", 0) if ch_segs else 0
+                seg_id_end = last_seg.get("id", 0)
+
+                for q in ch_quizzes:
+                    _normalize_quiz(q)
+                    q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
+                    q["chapter_index"] = ch_idx
+                    q["chapter_title"] = chapter["title"]
+                    q["trigger_time"] = round(trigger_time, 3)
+                    q["segment_range"] = [seg_id_start, seg_id_end]
+
+                ch_summary = (combined_result.get("chapter_summary") or "").strip()
+                if ch_summary:
+                    chapter_summaries.append((chapter["title"], ch_summary))
+
+            else:
+                # 수동 자막 경로
+                ch_transcript = {
+                    "text": " ".join(seg.get("text", "") for seg in ch_segs),
+                    "words": all_words,
+                    "segments": ch_segs,
+                    "language": language,
+                }
+                ch_enriched = keyword_extractor.extract_keywords(
+                    ch_transcript, blanks_per_sentence=blanks_per_sentence
+                )
+                ch_quizzes = quiz_generator.generate_quizzes(ch_segs, chapters=[chapter])
+                for q in ch_quizzes:
+                    _normalize_quiz(q)
+                    q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
+                    q["chapter_index"] = ch_idx
+
+            total_enriched_segments.extend(ch_enriched)
+            all_quizzes.extend(ch_quizzes)
+
+            # 게임 데이터 생성
+            ch_game_data = blank_subtitle.build_game_data(
+                ch_enriched, fall_speed=fall_speed, lead_time=lead_time,
+            )
+            ch_corrected = _build_corrected_subtitle_data(ch_enriched)
+
+            # chapter_ready 이벤트 (자막 + 퀴즈 포함)
+            event = {
+                "type":                "chapter_ready",
+                "chapter_index":       ch_idx,
+                "chapter_title":       chapter["title"],
+                "chapter_summary":     ch_summary,
+                "corrected_subtitles": ch_corrected.get("subtitles", []),
+                "subtitles":           ch_game_data.get("subtitles", []),
+                "fall_events":         ch_game_data.get("fall_events", []),
+                "quizzes":             ch_quizzes,
+            }
+
+            print(f"[TADAC] ⏱ 챕터 {ch_idx+1} 완료: {_time.time() - _t_ch_start:.1f}초")
+            yield event
+
+        # ── complete 이벤트 ──────────────────────────────────────────────────
+        _t_total = _time.time() - _t_pipeline_start
+        print(f"[TADAC] ⏱ 전체 파이프라인 완료: {_t_total:.1f}초 (STT: {_t_stt_total:.1f}초, 후처리: {_t_total - _t_stt_total:.1f}초)")
+
+        yield {
+            "type":       "complete",
+            "ai_summary": _compose_ai_summary(topic_summary, chapter_summaries),
+            "stats": {
+                "transcript_source": transcript_source,
+                "total_words":       len(all_words),
                 "language":          language,
                 "gpt_refined":       (transcript_source == "whisper" and refine),
                 "total_quizzes":     len(all_quizzes),
@@ -903,13 +1282,77 @@ def main():
     parser.add_argument("--no-refine",     action="store_true",       help="GPT 교정 스킵 (API 비용 절약)")
     parser.add_argument("--shorts",        action="store_true",       help="챕터별 숏폼 대본 + 영상 프롬프트 생성")
     parser.add_argument("--stream",        action="store_true",       help="스트리밍 모드 (챕터별 출력)")
+    parser.add_argument("--chunked",       action="store_true",       help="Chunked 스트리밍 (10분 단위 STT, 첫 결과 빠름)")
     args = parser.parse_args()
 
     print(f"[TADAC] 파이프라인 시작")
     print(f"[TADAC] 소스: {args.source}")
     print(f"[TADAC] 설정: lang={args.lang}, blanks={MAX_BLANKS_PER_SENTENCE}(고정), refine={not args.no_refine}, shorts={args.shorts}")
 
-    if args.stream:
+    if args.chunked:
+        # Chunked 스트리밍 모드: 10분 단위 STT → 즉시 교정+키워드 → 퀴즈는 마지막
+        print("[TADAC] Chunked 스트리밍 모드")
+
+        aggregated_corrected_subtitle_data = {
+            "subtitles": [],
+            "config": {"total_segments": 0},
+        }
+        aggregated_blank_game_data = {
+            "subtitles": [],
+            "fall_events": [],
+            "quizzes": [],
+            "config": {
+                "fall_speed": BASE_FALL_SPEED,
+                "lead_time": BASE_LEAD_TIME,
+                "blanks_per_sentence": MAX_BLANKS_PER_SENTENCE,
+            },
+        }
+
+        for event in run_pipeline_chunked_streaming(
+            source          = args.source,
+            language        = args.lang,
+            stt_prompt      = args.prompt,
+            refine          = not args.no_refine,
+            generate_shorts = args.shorts,
+        ):
+            print(f"\n[TADAC] === 이벤트: {event['type']} ===")
+            print(json.dumps(event, ensure_ascii=False, indent=2)[:500])
+
+            if event["type"] == "chapter_ready":
+                aggregated_corrected_subtitle_data["subtitles"].extend(event.get("corrected_subtitles", []))
+                aggregated_blank_game_data["subtitles"].extend(event.get("subtitles", []))
+                aggregated_blank_game_data["fall_events"].extend(event.get("fall_events", []))
+                aggregated_blank_game_data["quizzes"].extend(event.get("quizzes", []))
+            elif event["type"] == "complete":
+                aggregated_corrected_subtitle_data["stats"] = event.get("stats", {})
+                aggregated_blank_game_data["stats"] = event.get("stats", {})
+                aggregated_blank_game_data["ai_summary"] = event.get("ai_summary", "")
+
+        print("[TADAC] Chunked 스트리밍 완료")
+
+        aggregated_corrected_subtitle_data["config"]["total_segments"] = len(
+            aggregated_corrected_subtitle_data["subtitles"]
+        )
+        aggregated_blank_game_data["config"]["total_segments"] = len(
+            aggregated_blank_game_data["subtitles"]
+        )
+        aggregated_blank_game_data["config"]["total_blanks"] = sum(
+            len(sub.get("blanks", [])) for sub in aggregated_blank_game_data["subtitles"]
+        )
+
+        output_paths = _branch_output_paths(args.output)
+        output_paths["corrected_subtitles"].write_text(
+            json.dumps(aggregated_corrected_subtitle_data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        output_paths["blank_game_data"].write_text(
+            json.dumps(aggregated_blank_game_data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"[TADAC] 교정 자막 저장: {output_paths['corrected_subtitles'].resolve()}")
+        print(f"[TADAC] 빈칸 게임 데이터 저장: {output_paths['blank_game_data'].resolve()}")
+
+    elif args.stream:
         # 스트리밍 모드: 챕터별로 출력
         print("[TADAC] 스트리밍 모드")
         
