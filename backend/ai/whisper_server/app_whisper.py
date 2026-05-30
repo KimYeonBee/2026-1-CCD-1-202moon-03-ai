@@ -369,4 +369,6 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app_whisper:app", host="0.0.0.0", port=8002)
+    # 문자열 import("app_whisper:app")로 실행하면 이 파일이 한 번 더 import되어
+    # GPU 모델이 중복 로드된다. 이미 생성된 app 객체를 직접 넘긴다.
+    uvicorn.run(app, host="0.0.0.0", port=8002)

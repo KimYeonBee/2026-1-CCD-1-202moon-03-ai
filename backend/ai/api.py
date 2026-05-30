@@ -238,6 +238,7 @@ async def process_url_stream(req: UrlRequest):
                 stt_prompt          = req.stt_prompt,
                 refine              = req.refine,
                 generate_shorts     = req.shorts,
+                request_id          = request_id,
             ):
                 chunk.setdefault("request_id", request_id)
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
@@ -302,6 +303,7 @@ async def process_file_stream(req: UrlRequest):
                 stt_prompt          = req.stt_prompt,
                 refine              = req.refine,
                 generate_shorts     = req.shorts,
+                request_id          = request_id,
             ):
                 chunk.setdefault("request_id", request_id)
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"

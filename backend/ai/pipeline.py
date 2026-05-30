@@ -64,7 +64,30 @@ def _is_youtube_url(src):
 
 
 # ── 오디오 10분 단위 분할 ────────────────────────────────────────────────────
-CHUNK_DURATION_SEC = 600  # 10분
+CHUNK_DURATION_SEC = int(os.getenv("STT_CHUNK_DURATION_SEC", "600"))  # 10분
+STT_MODE = os.getenv("STT_MODE", "single").strip().lower()
+STT_CHUNKING_ENABLED = STT_MODE in {"chunk", "chunked", "parallel"}
+STT_CHUNK_THRESHOLD_SEC = float(os.getenv("STT_CHUNK_THRESHOLD_SEC", "3600"))  # 60분
+
+print(
+    "[TADAC] STT chunk 설정: "
+    f"mode={STT_MODE}, enabled={STT_CHUNKING_ENABLED}, "
+    f"threshold={STT_CHUNK_THRESHOLD_SEC/60:.1f}분, "
+    f"chunk={CHUNK_DURATION_SEC/60:.1f}분"
+)
+
+
+def _probe_audio_duration(audio_path):
+    import subprocess as _sp
+    probe = _sp.run(
+        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+        capture_output=True, text=True,
+    )
+    if probe.returncode != 0:
+        raise RuntimeError(f"ffprobe 오디오 길이 확인 실패: {audio_path}")
+    return float(probe.stdout.strip())
+
 
 def _build_backward_chunk_ranges(total_duration, chunk_sec=CHUNK_DURATION_SEC):
     ranges = []
@@ -83,14 +106,8 @@ def _split_audio_into_chunks(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
     뒤에서부터 chunk_sec 단위로 자른 뒤 시간순으로 반환한다.
     예: 17분 영상 → 0~7분, 7~17분. 병렬 STT에서 앞 영상 청크가 먼저 끝나기 쉽다.
     """
-    # 먼저 전체 오디오 길이 확인
     import subprocess as _sp
-    probe = _sp.run(
-        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
-        capture_output=True, text=True,
-    )
-    total_duration = float(probe.stdout.strip())
+    total_duration = _probe_audio_duration(audio_path)
     print(f"[TADAC] 오디오 총 길이: {total_duration:.1f}초 ({total_duration/60:.1f}분)")
 
     if total_duration <= chunk_sec * 1.3:
@@ -116,11 +133,11 @@ def _split_audio_into_chunks(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
     return chunks
 
 
-def _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs):
-    """오디오를 자동 분할하고 멀티 GPU 병렬 STT를 수행.
+def _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs, request_id=None):
+    """환경 설정에 따라 단일 STT 또는 멀티 GPU 청크 STT를 수행.
 
-    - 10분 이하: 분할 없이 단일 STT
-    - 10분 초과: 10분 청크로 분할 → 빈 GPU 수만큼 병렬 전송
+    기본값은 단일 STT다. word_timestamps=False 환경에서는 청크 분할의 속도 이득보다
+    중간 청크 누락 리스크가 더 커서, 긴 영상 병렬화가 필요할 때만 env로 켠다.
 
     Args:
         tmp_dirs: 임시 폴더 추적 리스트 (finally에서 정리용)
@@ -128,9 +145,30 @@ def _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, t
     Returns:
         dict: {"text": str, "words": list, "segments": list, "language": str}
     """
-    chunk_tmp_dir = tempfile.mkdtemp(prefix="tadac_chunks_")
-    tmp_dirs.append(chunk_tmp_dir)
-    audio_chunks = _split_audio_into_chunks(audio_path, chunk_tmp_dir)
+    total_duration = _probe_audio_duration(audio_path)
+    should_chunk = (
+        STT_CHUNKING_ENABLED
+        and total_duration > STT_CHUNK_THRESHOLD_SEC
+        and total_duration > CHUNK_DURATION_SEC * 1.3
+    )
+
+    if should_chunk:
+        print(
+            "[TADAC] STT 모드: 청크 병렬 "
+            f"(duration={total_duration/60:.1f}분, "
+            f"threshold={STT_CHUNK_THRESHOLD_SEC/60:.1f}분, "
+            f"chunk={CHUNK_DURATION_SEC/60:.1f}분)"
+        )
+        chunk_tmp_dir = tempfile.mkdtemp(prefix="tadac_chunks_")
+        tmp_dirs.append(chunk_tmp_dir)
+        audio_chunks = _split_audio_into_chunks(audio_path, chunk_tmp_dir)
+    else:
+        reason = "비활성화" if not STT_CHUNKING_ENABLED else "threshold 미만"
+        print(
+            "[TADAC] STT 모드: 단일 파일 "
+            f"(duration={total_duration/60:.1f}분, chunking={reason})"
+        )
+        audio_chunks = [(audio_path, 0.0)]
 
     all_segments = []
     all_words    = []
@@ -143,6 +181,7 @@ def _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, t
             language=language,
             stt_prompt=stt_prompt,
             title=content_title,
+            request_id=request_id,
         )
 
         for transcript_result, offset_sec in chunk_results:
@@ -183,6 +222,31 @@ def _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, t
         "segments": all_segments,
         "language": language,
     }
+
+
+def _log_large_transcript_gaps(segments, threshold_sec=120.0):
+    """STT 결과에 큰 시간 공백이 있으면 디버깅용 로그를 남긴다."""
+    if len(segments) < 2:
+        return
+
+    gaps = []
+    ordered = sorted(segments, key=lambda s: s.get("start", 0.0))
+    for prev, cur in zip(ordered, ordered[1:]):
+        gap = float(cur.get("start", 0.0) or 0.0) - float(prev.get("end", 0.0) or 0.0)
+        if gap >= threshold_sec:
+            gaps.append((prev, cur, gap))
+
+    if not gaps:
+        return
+
+    print(f"[TADAC] ⚠️ STT 큰 공백 감지: {len(gaps)}개 (기준 {threshold_sec:.0f}초)")
+    for prev, cur, gap in gaps[:10]:
+        print(
+            "[TADAC]   "
+            f"{prev.get('end', 0.0)/60:.1f}분~{cur.get('start', 0.0)/60:.1f}분 "
+            f"({gap/60:.1f}분), "
+            f"prev_id={prev.get('id')}, next_id={cur.get('id')}"
+        )
 
 
 # ── 비디오 → 오디오 추출 (로컬 파일용) ───────────────────────────────────────
@@ -538,6 +602,7 @@ def run_pipeline(
 
         # Whisper 원본 저장 (재처리 및 디버깅용)
         if transcript_source == "whisper":
+            _log_large_transcript_gaps(transcript.get("segments", []))
             _save_raw_transcript(transcript)
 
         print(f"[TADAC] 트랜스크립트 준비 완료: 출처={transcript_source}, "
@@ -825,6 +890,7 @@ def run_pipeline_streaming(
 
         # Whisper 원본 저장 (재처리 및 디버깅용)
         if transcript_source == "whisper":
+            _log_large_transcript_gaps(transcript.get("segments", []))
             _save_raw_transcript(transcript)
 
         _t_stt_done = _time.time()
@@ -1015,8 +1081,9 @@ def run_pipeline_streaming(
                 print(f"[TADAC] 임시 폴더 삭제: {d}")
 
 
-# ── Chunked 스트리밍 파이프라인 ───────────────────────────────────────────────
-# STT만 10분 chunk로 빠르게 수행 → 전체 STT 완료 후 챕터 기반 후처리
+# ── 챕터 스트리밍 파이프라인 ─────────────────────────────────────────────────
+# STT 완료 후 챕터 기반 후처리
+# 기본 STT는 단일 파일 처리이며, env로 청크 병렬화를 켠 경우에만 10분 단위로 분할한다.
 # 기존 run_pipeline_streaming과 동일한 이벤트 형태 (chapter_ready에 퀴즈 포함)
 
 def run_pipeline_chunked_streaming(
@@ -1028,15 +1095,18 @@ def run_pipeline_chunked_streaming(
     stt_prompt          = None,
     refine              = True,
     generate_shorts     = False,
+    request_id          = None,
 ):
     """
-    Chunked STT + 챕터 기반 스트리밍 파이프라인 (generator).
+    STT + 챕터 기반 스트리밍 파이프라인 (generator).
 
-    STT를 10분 chunk 단위로 수행하여 STT 소요 시간을 단축하고,
-    후처리는 기존과 동일하게 챕터 단위로 교정+키워드+퀴즈를 포함하여 스트리밍.
+    기본은 단일 파일 STT로 안정성을 우선한다.
+    STT_CHUNKING_ENABLED=true이고 영상이 threshold보다 길 때만
+    10분 chunk 병렬 STT를 사용한다. 후처리는 기존과 동일하게 챕터 단위로
+    교정+키워드+퀴즈를 포함하여 스트리밍한다.
 
     흐름:
-      1. 오디오 10분 단위 split → chunk별 STT 순차 수행
+      1. 오디오 STT 수행 (기본 단일 파일, 옵션 청크 병렬)
       2. 전체 STT 합치기 → 내용 분석 + 챕터 분할
       3. 챕터별 교정+키워드+퀴즈 → chapter_ready 즉시 스트리밍
 
@@ -1098,8 +1168,10 @@ def run_pipeline_chunked_streaming(
             else:
                 print(f"[TADAC] [chunked] 입력: 로컬 오디오 ({suffix})")
 
-        # ── Phase 1: 오디오 분할 + 멀티 GPU 병렬 STT ─────────────────────────
-        full_transcript = _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs)
+        # ── Phase 1: STT (기본 단일 파일, 옵션 청크 병렬) ───────────────────
+        full_transcript = _transcribe_auto_parallel(
+            audio_path, language, stt_prompt, content_title, tmp_dirs, request_id=request_id
+        )
         all_segments = full_transcript.get("segments", [])
         all_words    = full_transcript.get("words", [])
 
@@ -1108,6 +1180,13 @@ def run_pipeline_chunked_streaming(
 
         _t_stt_total = _time.time() - _t_pipeline_start
         print(f"\n[TADAC] ⏱ 전체 STT 완료: {_t_stt_total:.1f}초 (세그먼트 {len(all_segments)}개, 단어 {len(all_words)}개)")
+        if request_id:
+            first_text = (all_segments[0].get("text", "") if all_segments else "")[:120]
+            last_text = (all_segments[-1].get("text", "") if all_segments else "")[:120]
+            print(f"[TADAC][{request_id}] STT 샘플 처음: {first_text}")
+            print(f"[TADAC][{request_id}] STT 샘플 끝: {last_text}")
+
+        _log_large_transcript_gaps(all_segments)
 
         # Whisper 원본 저장
         _save_raw_transcript(full_transcript)
@@ -1287,7 +1366,7 @@ def main():
     parser.add_argument("--prompt",        default=None,              help="STT 전문 용어 힌트")
     parser.add_argument("--no-refine",     action="store_true",       help="GPT 교정 스킵 (API 비용 절약)")
     parser.add_argument("--shorts",        action="store_true",       help="챕터별 숏폼 대본 + 영상 프롬프트 생성")
-    parser.add_argument("--stream",        action="store_true",       help="스트리밍 모드 (챕터별 출력, 멀티GPU 병렬 STT)")
+    parser.add_argument("--stream",        action="store_true",       help="스트리밍 모드 (챕터별 출력, 기본 단일 STT)")
     args = parser.parse_args()
 
     print(f"[TADAC] 파이프라인 시작")
@@ -1295,8 +1374,8 @@ def main():
     print(f"[TADAC] 설정: lang={args.lang}, blanks={MAX_BLANKS_PER_SENTENCE}(고정), refine={not args.no_refine}, shorts={args.shorts}")
 
     if args.stream:
-        # 스트리밍 모드: 멀티GPU 병렬 STT + 챕터별 교정+키워드+퀴즈
-        print("[TADAC] 스트리밍 모드 (멀티GPU 병렬 STT)")
+        # 스트리밍 모드: STT + 챕터별 교정+키워드+퀴즈
+        print("[TADAC] 스트리밍 모드 (기본 단일 STT)")
 
         aggregated_corrected_subtitle_data = {
             "subtitles": [],
@@ -1333,7 +1412,7 @@ def main():
                 aggregated_blank_game_data["stats"] = event.get("stats", {})
                 aggregated_blank_game_data["ai_summary"] = event.get("ai_summary", "")
 
-        print("[TADAC] Chunked 스트리밍 완료")
+        print("[TADAC] 스트리밍 완료")
 
         aggregated_corrected_subtitle_data["config"]["total_segments"] = len(
             aggregated_corrected_subtitle_data["subtitles"]
