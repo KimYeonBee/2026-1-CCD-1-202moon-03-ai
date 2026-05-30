@@ -19,6 +19,7 @@ import os
 import shutil
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -209,7 +210,8 @@ async def process_url_stream(req: UrlRequest):
         raise HTTPException(status_code=400, detail="유효한 URL이 아닙니다")
 
     is_youtube = _is_youtube_url(req.url)
-    print(f"[TADAC] API /process-url/stream: {req.url} ({'YouTube' if is_youtube else 'Direct URL'})")
+    request_id = uuid.uuid4().hex[:8]
+    print(f"[TADAC] API /process-url/stream[{request_id}]: {req.url} ({'YouTube' if is_youtube else 'Direct URL'})")
 
     if is_youtube:
         source = req.url
@@ -237,9 +239,11 @@ async def process_url_stream(req: UrlRequest):
                 refine              = req.refine,
                 generate_shorts     = req.shorts,
             ):
+                chunk.setdefault("request_id", request_id)
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
         except Exception as e:
-            error_event = {"type": "error", "message": str(e)}
+            print(f"[TADAC] API /process-url/stream[{request_id}] error: {e}")
+            error_event = {"type": "error", "message": str(e), "request_id": request_id}
             yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
         finally:
             if tmp_dir:
@@ -274,7 +278,8 @@ async def process_file_stream(req: UrlRequest):
     if not req.url.startswith("http"):
         raise HTTPException(status_code=400, detail="유효한 URL이 아닙니다")
 
-    print(f"[TADAC] API /process/stream: {req.url}")
+    request_id = uuid.uuid4().hex[:8]
+    print(f"[TADAC] API /process/stream[{request_id}]: {req.url}")
 
     tmp_dir = tempfile.mkdtemp(prefix="tadac_url_download_")
     try:
@@ -298,9 +303,11 @@ async def process_file_stream(req: UrlRequest):
                 refine              = req.refine,
                 generate_shorts     = req.shorts,
             ):
+                chunk.setdefault("request_id", request_id)
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
         except Exception as e:
-            error_event = {"type": "error", "message": str(e)}
+            print(f"[TADAC] API /process/stream[{request_id}] error: {e}")
+            error_event = {"type": "error", "message": str(e), "request_id": request_id}
             yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)

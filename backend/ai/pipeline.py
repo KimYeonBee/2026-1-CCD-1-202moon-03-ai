@@ -66,8 +66,23 @@ def _is_youtube_url(src):
 # ── 오디오 10분 단위 분할 ────────────────────────────────────────────────────
 CHUNK_DURATION_SEC = 600  # 10분
 
+def _build_backward_chunk_ranges(total_duration, chunk_sec=CHUNK_DURATION_SEC):
+    ranges = []
+    end = float(total_duration)
+    while end > 0:
+        start = max(0.0, end - chunk_sec)
+        ranges.append((start, end))
+        end = start
+    ranges.reverse()
+    return ranges
+
+
 def _split_audio_into_chunks(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
-    """오디오를 chunk_sec 단위로 분할. 반환: [(chunk_path, offset_sec), ...]"""
+    """오디오를 chunk_sec 단위로 분할. 반환: [(chunk_path, offset_sec), ...]
+
+    뒤에서부터 chunk_sec 단위로 자른 뒤 시간순으로 반환한다.
+    예: 17분 영상 → 0~7분, 7~17분. 병렬 STT에서 앞 영상 청크가 먼저 끝나기 쉽다.
+    """
     # 먼저 전체 오디오 길이 확인
     import subprocess as _sp
     probe = _sp.run(
@@ -82,21 +97,20 @@ def _split_audio_into_chunks(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
         # 분할 불필요 (chunk 1개 + 짧은 꼬리만 남을 때)
         return [(audio_path, 0.0)]
 
+    ranges = _build_backward_chunk_ranges(total_duration, chunk_sec)
+
     chunks = []
-    offset = 0.0
-    idx = 0
-    while offset < total_duration:
+    for idx, (offset, end) in enumerate(ranges):
         chunk_path = os.path.join(tmp_dir, f"chunk_{idx:03d}.mp3")
+        duration = end - offset
         _sp.run(
             ["ffmpeg", "-y", "-i", audio_path,
-             "-ss", str(offset), "-t", str(chunk_sec),
+             "-ss", str(offset), "-t", str(duration),
              "-acodec", "mp3", "-loglevel", "quiet", chunk_path],
             check=True,
         )
         chunks.append((chunk_path, offset))
-        print(f"[TADAC] chunk {idx}: {offset:.0f}초~{min(offset+chunk_sec, total_duration):.0f}초")
-        offset += chunk_sec
-        idx += 1
+        print(f"[TADAC] chunk {idx}: {offset:.0f}초~{end:.0f}초")
 
     print(f"[TADAC] 오디오 분할 완료: {len(chunks)}개 chunk")
     return chunks

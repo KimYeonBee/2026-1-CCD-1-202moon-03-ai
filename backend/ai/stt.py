@@ -19,6 +19,7 @@ load_dotenv()
 
 # ── 원격 Whisper 서버 설정 ───────────────────────────────────────────────────────
 WHISPER_API_URL = os.getenv("WHISPER_API_URL", "http://210.94.179.19:8002/v1")
+WHISPER_CLIENT_MAX_PARALLEL = os.getenv("WHISPER_CLIENT_MAX_PARALLEL")
 
 _whisper_client = None
 
@@ -355,7 +356,17 @@ def transcribe_parallel(chunk_list, language="ko", stt_prompt=None, title=None):
     # 서버가 알아서 GPU 큐잉을 해주므로, 청크를 모두 동시에 보내도 됨.
     # 다만 max_parallel로 클라이언트 측에서도 동시 요청을 제한하여
     # 서버 메모리 부담과 네트워크 부하를 줄임.
+    client_limit = None
+    if WHISPER_CLIENT_MAX_PARALLEL:
+        try:
+            client_limit = max(1, int(WHISPER_CLIENT_MAX_PARALLEL))
+        except ValueError:
+            print(f"[TADAC] WHISPER_CLIENT_MAX_PARALLEL 파싱 실패: {WHISPER_CLIENT_MAX_PARALLEL}")
+
     effective_parallel = min(max_parallel, len(chunk_list))
+    if client_limit is not None:
+        effective_parallel = min(effective_parallel, client_limit)
+        print(f"[TADAC] STT 클라이언트 병렬 제한: {client_limit}")
     print(f"[TADAC] 병렬 STT 시작: {len(chunk_list)}개 청크, 동시 {effective_parallel}개")
 
     with ThreadPoolExecutor(max_workers=effective_parallel) as executor:
