@@ -4,7 +4,7 @@ STT 모듈 — 학교 GPU 서버의 로컬 Whisper API를 호출하여 음성→
 
 - 학교 GPU 서버(app_whisper.py)가 OpenAI Audio Transcriptions API 규격을 모방하므로
   OpenAI SDK의 base_url만 변경하여 호출
-- 서버에서 받은 단어 타임스탬프를 세그먼트로 그루핑 (문장 종결 부호 + 묵음 기반)
+- 서버에서 받은 세그먼트 타임스탬프를 중심으로 후처리
 - 출력 포맷은 기존과 동일: {text, words, segments, language}
 """
 
@@ -35,13 +35,62 @@ def _get_whisper_client():
     return _whisper_client
 
 
-# ── words → segments 그루핑 ──────────────────────────────────────────────────────
+# ── segments 후처리 ──────────────────────────────────────────────────────────────
 
 SENTENCE_END_CHARS = {".", "?", "!", "。", "?", "!"}
 
 MIN_SEGMENT_SEC = 2.5
 MAX_SEGMENT_CHARS = 55
 MIN_SEGMENT_CHARS = 30
+
+
+def _get_field(obj, name, default=None):
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
+def _normalise_words(raw_words):
+    """하위 호환용 words 필드를 유지하되, 없으면 빈 배열로 둔다."""
+    all_words = []
+    for w in raw_words or []:
+        word = _get_field(w, "word", "")
+        if not word:
+            continue
+        all_words.append({
+            "word":  word,
+            "start": round(float(_get_field(w, "start", 0.0) or 0.0), 3),
+            "end":   round(float(_get_field(w, "end", 0.0) or 0.0), 3),
+        })
+    return all_words
+
+
+def _normalise_segments(raw_segments, fallback_text="", fallback_duration=0.0):
+    segments = []
+    for i, seg in enumerate(raw_segments or []):
+        text = (_get_field(seg, "text", "") or "").strip()
+        if not text:
+            continue
+        start = float(_get_field(seg, "start", 0.0) or 0.0)
+        end = float(_get_field(seg, "end", start) or start)
+        segments.append({
+            "id":    int(_get_field(seg, "id", len(segments)) or len(segments)),
+            "start": round(start, 3),
+            "end":   round(end, 3),
+            "text":  text,
+        })
+
+    if not segments and fallback_text.strip():
+        segments.append({
+            "id":    0,
+            "start": 0.0,
+            "end":   round(float(fallback_duration or 0.0), 3),
+            "text":  fallback_text.strip(),
+        })
+
+    for i, seg in enumerate(segments):
+        seg["id"] = i
+    return segments
 
 
 def _dedupe_hallucination_loops(segments, min_duration=0.1):
@@ -348,7 +397,7 @@ def _run_transcribe(audio_path, language, prompt):
                     language=language or "ko",
                     prompt=prompt or "",
                     response_format="verbose_json",
-                    timestamp_granularities=["word"],
+                    timestamp_granularities=["segment"],
                 )
             break
         except Exception as e:
@@ -359,15 +408,15 @@ def _run_transcribe(audio_path, language, prompt):
             else:
                 raise RuntimeError(f"Whisper API 호출 실패 (재시도 소진): {e}") from e
 
-    all_words = []
-    for w in (response.words or []):
-        all_words.append({
-            "word":  w.word,
-            "start": round(w.start, 3),
-            "end":   round(w.end, 3),
-        })
-
-    segments = _group_words_into_segments(all_words)
+    text = (_get_field(response, "text", "") or "").strip()
+    all_words = _normalise_words(_get_field(response, "words", None))
+    segments = _normalise_segments(
+        _get_field(response, "segments", None),
+        fallback_text=text,
+        fallback_duration=_get_field(response, "duration", 0.0),
+    )
+    if not segments and all_words:
+        segments = _group_words_into_segments(all_words)
     segments = _dedupe_hallucination_loops(segments)
     segments = _split_long_segments(segments, all_words)
     before   = len(segments)
@@ -376,7 +425,7 @@ def _run_transcribe(audio_path, language, prompt):
         print(f"[TADAC] 짧은 세그먼트 병합: {before}개 → {len(segments)}개 (min {MIN_SEGMENT_CHARS}자)")
 
     return {
-        "text":     response.text.strip(),
+        "text":     text,
         "words":    all_words,
         "segments": segments,
         "language": language or "ko",

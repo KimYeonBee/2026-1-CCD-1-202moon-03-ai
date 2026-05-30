@@ -29,7 +29,7 @@ from fastapi.responses import JSONResponse
 app = FastAPI(title="TADAC Whisper STT Server", version="3.0.0")
 
 # ── 설정 ─────────────────────────────────────────────────────────────────────
-WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL", "large-v3")
+WHISPER_MODEL_SIZE = "/home/202moon/whisper_server/faster-whisper-large-v3"
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 
 # 특정 GPU만 사용하려면 환경변수로 지정 (예: "0,2" → GPU 0, 2만 사용)
@@ -169,7 +169,7 @@ def _do_transcribe(model, tmp_path, language, prompt, filename):
         tmp_path,
         language=language,
         initial_prompt=prompt,
-        word_timestamps=True,
+        word_timestamps=False,
         beam_size=5,
         vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=500),
@@ -196,18 +196,17 @@ def _do_transcribe(model, tmp_path, language, prompt, filename):
         if seg_end > duration:
             duration = seg_end
 
-        if seg.words:
-            for w in seg.words:
-                word_text = w.word or ""
-                if REPLACEMENT_CHAR in word_text:
-                    word_text = word_text.replace(REPLACEMENT_CHAR, "")
-                if not word_text:
-                    continue
-                words.append({
-                    "word": word_text,
-                    "start": round(w.start, 3),
-                    "end": round(w.end, 3),
-                })
+        for w in getattr(seg, "words", None) or []:
+            word_text = w.word or ""
+            if REPLACEMENT_CHAR in word_text:
+                word_text = word_text.replace(REPLACEMENT_CHAR, "")
+            if not word_text:
+                continue
+            words.append({
+                "word": word_text,
+                "start": round(w.start, 3),
+                "end": round(w.end, 3),
+            })
 
     text = " ".join(text_parts).strip()
     elapsed = time.time() - t0

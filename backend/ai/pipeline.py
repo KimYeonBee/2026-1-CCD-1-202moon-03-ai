@@ -219,7 +219,10 @@ def _save_raw_transcript(transcript, output_dir=None):
 # GPT가 놓친 키워드를 global_keywords 문자열 매칭으로 채움
 
 def _fill_missing_keywords(enriched_segments, global_keywords, all_words, max_per_segment=2):
-    """GPT가 놓친 키워드를 전역 목록에서 문자열 매칭으로 보완"""
+    """GPT가 놓친 키워드를 전역 목록에서 문자열 매칭으로 보완.
+
+    all_words는 하위 호환용 파라미터이며, 키워드 스케줄은 세그먼트 기준으로 계산한다.
+    """
     filled_count = 0
     for seg in enriched_segments:
         existing_kws = [kw["keyword"] for kw in seg.get("keywords", [])]
@@ -235,25 +238,14 @@ def _fill_missing_keywords(enriched_segments, global_keywords, all_words, max_pe
             if len(term) < 2 or term in existing_kws:
                 continue
             if term in text:
-                word_info = keyword_extractor._find_word_in_segment(term, seg, all_words)
-                if word_info:
-                    seg["keywords"].append({
-                        "keyword": term,
-                        "start": word_info["start"],
-                        "end": word_info["end"],
-                        "found": True,
-                    })
-                else:
-                    mid = (seg.get("start", 0.0) + seg.get("end", 0.0)) / 2
-                    seg["keywords"].append({
-                        "keyword": term,
-                        "start": mid,
-                        "end": mid + 0.5,
-                        "found": False,
-                    })
+                seg["keywords"].append({
+                    "keyword": term,
+                    "found": False,
+                })
                 existing_kws.append(term)
                 remaining -= 1
                 filled_count += 1
+        keyword_extractor.schedule_segment_keywords(seg)
 
     if filled_count:
         print(f"[TADAC] 키워드 폴백 보완: {filled_count}개 추가")
@@ -271,7 +263,7 @@ def _apply_gpt_results(ch_segs, combined_result, all_words, name_corrections=Non
     Args:
         ch_segs: 원본 세그먼트 목록
         combined_result: GPT 반환값 {corrections, segment_keywords, quizzes}
-        all_words: Whisper word timestamps
+        all_words: 하위 호환용 파라미터. 현재 키워드 스케줄 계산에는 사용하지 않음.
         name_corrections: {"잘못된 표기": "올바른 표기", ...} GPT가 누락한 고유명사를 일괄 치환
     
     Returns:
