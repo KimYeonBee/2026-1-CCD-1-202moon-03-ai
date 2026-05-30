@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-키워드 추출 모듈 — GPT로 세그먼트별 핵심 단어 추출 + 타임스탬프 매핑
+키워드 추출 모듈 — GPT로 세그먼트별 핵심 단어 추출 + 세그먼트 내 스케줄 배치
 
 - GPT-5.4-nano 문장당 N개 키워드 추출
-- Whisper 단어 타임스탬프와 매핑 (정확 일치 → 부분 일치 순서로 시도)
+- Whisper 단어 타임스탬프에 의존하지 않고 세그먼트 내 순서대로 균등 배치
 - 20개 세그먼트씩 묶어서 배치 처리 (API 호출 최소화)
 """
 
@@ -24,6 +24,37 @@ client = OpenAI(
 
 # 한 번의 GPT 호출에 처리할 세그먼트 수
 BATCH_SIZE = 20
+
+
+def _keyword_text(keyword_info):
+    token = keyword_info.get("keyword", "") if isinstance(keyword_info, dict) else keyword_info
+    return str(token or "")
+
+
+def _scheduled_target_time(segment, blank_index, blank_count):
+    start = float(segment.get("start", 0.0) or 0.0)
+    end = float(segment.get("end", start) or start)
+    duration = max(end - start, 0.0)
+    if blank_count <= 0 or duration == 0:
+        return round(start, 3)
+    return round(start + duration * ((blank_index + 1) / (blank_count + 1)), 3)
+
+
+def schedule_segment_keywords(segment):
+    """키워드 메타데이터의 start/end를 세그먼트 내 균등 스케줄 시점으로 채운다."""
+    keywords = segment.get("keywords", [])
+    blank_count = len(keywords)
+    seg_end = float(segment.get("end", segment.get("start", 0.0)) or 0.0)
+
+    for idx, kw_info in enumerate(keywords):
+        if not isinstance(kw_info, dict):
+            continue
+        target = _scheduled_target_time(segment, idx, blank_count)
+        kw_info["start"] = target
+        kw_info["end"] = round(min(target + 0.5, seg_end), 3)
+        kw_info["found"] = False
+
+    return segment
 
 
 # ── GPT 프롬프트 ──────────────────────────────────────────────────────────────
@@ -113,8 +144,9 @@ def _call_gpt_batch(segments, blanks_per_sentence):
         return []
 
 
-# ── 키워드 → 타임스탬프 매핑 ─────────────────────────────────────────────────
-# 한국어 형태소 특성 때문에 "도파민이" ⊃ "도파민" 처럼 포함 관계로도 탐색
+# ── Legacy helpers ───────────────────────────────────────────────────────────
+# 예전 word timestamp 매핑 API를 참조하는 외부 코드가 있을 수 있어 남겨둔다.
+# 현재 파이프라인은 아래 함수를 호출하지 않고, 세그먼트 기반 스케줄을 사용한다.
 
 def _find_word_timestamp(keyword, words):
     # 1차: 정확히 일치하는 단어 탐색
@@ -144,11 +176,10 @@ def _find_word_in_segment(keyword, segment, all_words):
 
 
 # ── 메인 함수 ─────────────────────────────────────────────────────────────────
-# Whisper transcript → GPT 키워드 추출 → 타임스탬프 매핑 → 결과 반환
+# Whisper transcript → GPT 키워드 추출 → 세그먼트 내 스케줄 배치 → 결과 반환
 
 def extract_keywords(transcript, blanks_per_sentence=2):
     segments  = transcript.get("segments", [])
-    all_words = transcript.get("words", [])
 
     if not segments:
         print("[TADAC] 세그먼트가 없어 키워드 추출 불가")
@@ -185,59 +216,45 @@ def extract_keywords(transcript, blanks_per_sentence=2):
                 continue
             keyword_map[seg_id] = item.get("keywords", [])
 
-    # 키워드 타임스탬프 매핑
+    # 키워드 스케줄 배치
     enriched       = []
     total_keywords = 0
-    total_found    = 0
 
     for seg in normalised:
         raw_keywords    = keyword_map.get(seg["id"], [])
         mapped_keywords = []
 
         for kw in raw_keywords:
+            keyword = _keyword_text(kw)
+            if not keyword:
+                continue
             total_keywords += 1
-            word_info = _find_word_in_segment(kw, seg, all_words)
+            mapped_keywords.append({
+                "keyword": keyword,
+                "found":   False,
+            })
 
-            if word_info:
-                total_found += 1
-                mapped_keywords.append({
-                    "keyword": kw,
-                    "start":   word_info["start"],
-                    "end":     word_info["end"],
-                    "found":   True,    # 타임스탬프 매핑 성공
-                })
-            else:
-                # 매핑 실패 → 세그먼트 중간 시점을 폴백으로 사용
-                mid = (seg["start"] + seg["end"]) / 2
-                mapped_keywords.append({
-                    "keyword": kw,
-                    "start":   mid,
-                    "end":     mid + 0.5,
-                    "found":   False,   # 타임스탬프 매핑 실패
-                })
-
-        enriched.append({
+        enriched_seg = {
             "segment_id": seg["id"],
             "start":      seg["start"],
             "end":        seg["end"],
             "text":       seg["text"],
             "keywords":   mapped_keywords,
-        })
+        }
+        enriched.append(schedule_segment_keywords(enriched_seg))
 
-    match_rate = total_found / max(total_keywords, 1) * 100
-    print(f"[TADAC] 키워드 추출 완료: {total_keywords}개 추출, "
-          f"{total_found}개 타임스탬프 매핑 ({match_rate:.0f}%)")
+    print(f"[TADAC] 키워드 추출 완료: {total_keywords}개 추출, 세그먼트 내 균등 스케줄 배치")
 
     return enriched
 
 def enrich_segments_with_keywords(segments, keyword_map, all_words):
     """
-    GPT 추출을 제외하고, 주어진 키워드 맵을 바탕으로 타임스탬프 매핑만 수행.
+    GPT 추출을 제외하고, 주어진 키워드 맵을 바탕으로 세그먼트 내 균등 스케줄 배치만 수행.
     keyword_map: {segment_id: [keyword1, keyword2, ...]}
+    all_words: 하위 호환용 파라미터. 현재 로직에서는 사용하지 않음.
     """
     enriched       = []
     total_keywords = 0
-    total_found    = 0
 
     for seg in segments:
         seg_id = seg.get("id", seg.get("segment_id", 0))
@@ -245,36 +262,24 @@ def enrich_segments_with_keywords(segments, keyword_map, all_words):
         mapped_keywords = []
 
         for kw in raw_keywords:
+            keyword = _keyword_text(kw)
+            if not keyword:
+                continue
             total_keywords += 1
-            word_info = _find_word_in_segment(kw, seg, all_words)
+            mapped_keywords.append({
+                "keyword": keyword,
+                "found":   False,
+            })
 
-            if word_info:
-                total_found += 1
-                mapped_keywords.append({
-                    "keyword": kw,
-                    "start":   word_info["start"],
-                    "end":     word_info["end"],
-                    "found":   True,
-                })
-            else:
-                mid = (seg.get("start", 0.0) + seg.get("end", 0.0)) / 2
-                mapped_keywords.append({
-                    "keyword": kw,
-                    "start":   mid,
-                    "end":     mid + 0.5,
-                    "found":   False,
-                })
-
-        enriched.append({
+        enriched_seg = {
             "segment_id": seg_id,
             "start":      seg.get("start", 0.0),
             "end":        seg.get("end", 0.0),
             "text":       seg.get("text", ""),
             "keywords":   mapped_keywords,
-        })
+        }
+        enriched.append(schedule_segment_keywords(enriched_seg))
 
-    match_rate = (total_found / max(total_keywords, 1)) * 100
-    print(f"[TADAC] 타임스탬프 매핑: {total_keywords}개 중 {total_found}개 매핑 ({match_rate:.0f}%)")
+    print(f"[TADAC] 키워드 스케줄 배치: {total_keywords}개")
 
     return enriched
-

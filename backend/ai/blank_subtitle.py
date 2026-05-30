@@ -3,11 +3,11 @@
 빈칸 자막 + 낙하 이벤트 생성 모듈
 
 - 키워드 위치를 "______"으로 치환한 빈칸 자막 생성
-- 낙하 이벤트에는 target_time(키워드 발화 시점)만 포함
+- 낙하 이벤트에는 target_time(세그먼트 내 낙하 스케줄 목표 시점)만 포함
   → fall_start_time / fall_duration 은 프론트엔드가 자체 난이도 설정으로 계산
 
 프론트엔드 계산 공식:
-    fall_duration   = lead_time / fall_speed          (프론트 설정값)
+    fall_duration   = fall_window / fall_speed
     fall_start_time = target_time - fall_duration
 """
 
@@ -22,8 +22,52 @@ from transcript_refiner import filter_filler_keywords
 #   2) 인접 빈칸 사이 최소 간격 — 키워드가 몰려서 발화되면 따라잡을 수 없음
 
 SHORT_SEG_THRESHOLD = 2.5    # 자막 길이(초) — 이하면 빈칸 1개로 제한
-MIN_BLANK_GAP       = 1.8    # 인접 빈칸의 발화 시점 최소 간격(초)
+MIN_BLANK_GAP       = 1.8    # 인접 빈칸의 스케줄 목표 시점 최소 간격(초)
 MAX_KEYWORD_LEN     = 5      # 빈칸 키워드 최대 글자 수
+
+
+def _keyword_text(keyword_info):
+    token = keyword_info.get("keyword", "") if isinstance(keyword_info, dict) else keyword_info
+    return str(token or "")
+
+
+def _scheduled_target_time(segment_start, segment_end, blank_index, blank_count):
+    duration = max(float(segment_end or segment_start) - float(segment_start or 0.0), 0.0)
+    start = float(segment_start or 0.0)
+    if blank_count <= 0 or duration == 0:
+        return round(start, 3)
+    return round(start + duration * ((blank_index + 1) / (blank_count + 1)), 3)
+
+
+def _sort_keywords_by_blank_order(text, keywords):
+    indexed = []
+    for fallback_idx, kw in enumerate(keywords):
+        keyword = _keyword_text(kw)
+        idx = text.find(keyword)
+        if idx == -1:
+            idx = len(text) + fallback_idx
+        indexed.append((idx, fallback_idx, kw))
+    indexed.sort(key=lambda item: (item[0], item[1]))
+    return [kw for _, _, kw in indexed]
+
+
+def _schedule_keyword_metadata(seg):
+    keywords = seg.get("keywords", [])
+    blank_count = len(keywords)
+    seg_end = float(seg.get("end", seg.get("start", 0.0)) or 0.0)
+
+    for blank_idx, kw in enumerate(keywords):
+        if not isinstance(kw, dict):
+            continue
+        target = _scheduled_target_time(
+            seg.get("start", 0.0),
+            seg.get("end", seg.get("start", 0.0)),
+            blank_idx,
+            blank_count,
+        )
+        kw["start"] = target
+        kw["end"] = round(min(target + 0.5, seg_end), 3)
+        kw["found"] = False
 
 
 def _apply_density_limits(enriched_segments):
@@ -41,8 +85,7 @@ def _apply_density_limits(enriched_segments):
     dropped_long = 0
     for seg in enriched_segments:
         original = seg.get("keywords", [])
-        filtered = [kw for kw in original
-                    if len(kw["keyword"] if isinstance(kw, dict) else kw) <= MAX_KEYWORD_LEN]
+        filtered = [kw for kw in original if len(_keyword_text(kw)) <= MAX_KEYWORD_LEN]
         dropped_long += len(original) - len(filtered)
         seg["keywords"] = filtered
 
@@ -52,17 +95,25 @@ def _apply_density_limits(enriched_segments):
         duration   = seg.get("end", 0.0) - seg.get("start", 0.0)
         max_blanks = 1 if duration < SHORT_SEG_THRESHOLD else 2
 
-        keywords = seg.get("keywords", [])
+        keywords = _sort_keywords_by_blank_order(seg.get("text", ""), seg.get("keywords", []))
         if len(keywords) > max_blanks:
-            sorted_kws = sorted(keywords, key=lambda k: k.get("start", seg.get("start", 0.0)))
             dropped_short  += len(keywords) - max_blanks
-            seg["keywords"] = sorted_kws[:max_blanks]
+            seg["keywords"] = keywords[:max_blanks]
+        else:
+            seg["keywords"] = keywords
 
     # 2단계 — 전역 최소 간격: 인접 빈칸이 너무 가까우면 뒤쪽 drop
     flat = []  # (target_time, seg_idx, kw_idx)
     for seg_idx, seg in enumerate(enriched_segments):
-        for kw_idx, kw in enumerate(seg.get("keywords", [])):
-            target = kw.get("start", seg.get("start", 0.0))
+        keywords = seg.get("keywords", [])
+        blank_count = len(keywords)
+        for kw_idx, _ in enumerate(keywords):
+            target = _scheduled_target_time(
+                seg.get("start", 0.0),
+                seg.get("end", seg.get("start", 0.0)),
+                kw_idx,
+                blank_count,
+            )
             flat.append((target, seg_idx, kw_idx))
     flat.sort(key=lambda x: x[0])
 
@@ -79,6 +130,9 @@ def _apply_density_limits(enriched_segments):
         filtered = [kw for kw_idx, kw in enumerate(original) if (seg_idx, kw_idx) in keep]
         dropped_gap   += len(original) - len(filtered)
         seg["keywords"] = filtered
+
+    for seg in enriched_segments:
+        _schedule_keyword_metadata(seg)
 
     if dropped_stop or dropped_long or dropped_short or dropped_gap:
         print(f"[TADAC] 빈칸 밀도 제어: stopword {dropped_stop}개, "
@@ -97,7 +151,7 @@ def _make_blank_text(original_text, keywords):
 
     # 각 키워드의 텍스트 내 위치 탐색
     for kw_info in keywords:
-        keyword = kw_info["keyword"]
+        keyword = _keyword_text(kw_info)
         idx     = text.find(keyword)  # 정확 일치 탐색
 
         if idx == -1:
@@ -117,35 +171,37 @@ def _make_blank_text(original_text, keywords):
 
     # 빈칸 메타데이터 — 왼쪽부터 순서대로 기록
     blanks      = []
+    blank_keywords = []
     blank_count = 0
-    for _, keyword, _ in sorted(kw_positions, key=lambda x: x[0]):
+    for _, keyword, kw_info in sorted(kw_positions, key=lambda x: x[0]):
         blanks.append({
             "keyword":       keyword,
             "position":      blank_count,   # 왼쪽부터 몇 번째 빈칸인지
             "answer_length": len(keyword),  # 정답 글자 수 (힌트 표시용)
         })
+        blank_keywords.append(kw_info)
         blank_count += 1
 
-    return text, blanks
+    return text, blanks, blank_keywords
 
 
 # ── 낙하 이벤트 생성 ──────────────────────────────────────────────────────────
-# AI는 target_time(발화 시점)과 fall_window(자막 시작~발화 구간)를 제공
+# AI는 target_time(세그먼트 내 낙하 스케줄 목표 시점)과 fall_window(자막 시작~목표 구간)를 제공
 # fall_start_time / fall_duration 은 프론트엔드가 난이도 설정으로 계산
 #
 # fall_window: target_time - segment.start
-#   → 자막이 화면에 뜬 시점부터 키워드가 발화되기까지의 시간
+#   → 자막이 화면에 뜬 시점부터 낙하 목표 시점까지의 시간
 #   → 이 구간 안에서만 키워드가 낙하해야 자막 뜨기 전에 도착하는 버그가 없음
 #
 # 프론트엔드 계산 공식:
 #   fall_duration   = fall_window / fall_speed
 #   fall_start_time = target_time - fall_duration
 
-def _make_fall_event(keyword, keyword_timestamp, segment_id, segment_start):
-    fall_window = round(keyword_timestamp - segment_start, 3)  # 자막 시작부터 발화까지 구간
+def _make_fall_event(keyword, target_time, segment_id, segment_start):
+    fall_window = round(target_time - segment_start, 3)  # 자막 시작부터 낙하 목표 시점까지 구간
     return {
         "keyword":     keyword,
-        "target_time": round(keyword_timestamp, 3),  # 키워드 발화 시점 = 낙하 목표 지점
+        "target_time": round(target_time, 3),        # 세그먼트 내 균등 배치된 낙하 목표 시점
         "fall_window": max(fall_window, 0.5),         # 최소 0.5초 보장 (너무 짧으면 낙하 불가)
         "segment_id":  segment_id,
     }
@@ -169,7 +225,7 @@ def build_game_data(enriched_segments, fall_speed=1.0, lead_time=3.0):
         keywords = seg.get("keywords", [])
 
         # 빈칸 자막 텍스트 + 빈칸 메타데이터 생성
-        blank_text, blanks = _make_blank_text(seg["text"], keywords)
+        blank_text, blanks, blank_keywords = _make_blank_text(seg["text"], keywords)
 
         subtitles.append({
             "segment_id":    seg["segment_id"],
@@ -181,18 +237,24 @@ def build_game_data(enriched_segments, fall_speed=1.0, lead_time=3.0):
         })
         total_blanks += len(blanks)
 
-        # 키워드별 낙하 이벤트 — target_time + fall_window 포함
-        for kw_info in keywords:
-            target_time = kw_info.get("start", seg["start"])  # 키워드 발화 시점
+        # 빈칸별 낙하 이벤트 — segment 내 blank 순서 기준 균등 배치
+        blank_count = len(blank_keywords)
+        for blank_idx, kw_info in enumerate(blank_keywords):
+            target_time = _scheduled_target_time(
+                seg.get("start", 0.0),
+                seg.get("end", seg.get("start", 0.0)),
+                blank_idx,
+                blank_count,
+            )
             event = _make_fall_event(
-                keyword           = kw_info["keyword"],
-                keyword_timestamp = target_time,
-                segment_id        = seg["segment_id"],
-                segment_start     = seg["start"],  # 자막 시작 시점 (fall_window 계산용)
+                keyword       = _keyword_text(kw_info),
+                target_time   = target_time,
+                segment_id    = seg["segment_id"],
+                segment_start = seg["start"],  # 자막 시작 시점 (fall_window 계산용)
             )
             fall_events.append(event)
 
-    # 발화 시점 기준으로 정렬 (프론트엔드가 순서대로 처리)
+    # 스케줄 목표 시점 기준으로 정렬 (프론트엔드가 순서대로 처리)
     fall_events.sort(key=lambda e: e["target_time"])
 
     game_data = {
