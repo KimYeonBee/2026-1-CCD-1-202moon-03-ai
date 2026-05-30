@@ -270,6 +270,29 @@ def test_quiz_grouping() -> bool:
         return False
 
 
+def test_backward_chunk_ranges() -> bool:
+    """Unit test: 앞 영상 청크가 짧게 먼저 처리되도록 뒤에서부터 분할."""
+    import pipeline
+
+    print("\n[TEST] 뒤쪽 기준 오디오 청크 분할 단위 테스트")
+
+    try:
+        ranges = pipeline._build_backward_chunk_ranges(904.6, chunk_sec=600)
+        rounded = [(round(s, 1), round(e, 1)) for s, e in ranges]
+
+        assert rounded == [(0.0, 304.6), (304.6, 904.6)], f"분할 범위 오류: {rounded}"
+        assert ranges[0][0] == 0.0, "첫 청크는 영상 시작 지점이어야 함"
+        assert ranges[0][1] - ranges[0][0] < ranges[1][1] - ranges[1][0], "앞 청크가 더 짧아야 함"
+
+        print(f"  ranges: {rounded} ✓")
+        print("[TEST] 뒤쪽 기준 오디오 청크 분할 단위 테스트 ✓")
+        return True
+    except Exception as e:
+        print(f"[TEST] 뒤쪽 기준 오디오 청크 분할 FAILED: {e}")
+        traceback.print_exc()
+        return False
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 DEFAULT_YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"  # replace with real lecture URL
@@ -293,6 +316,7 @@ def main() -> None:
     results.append(test_vtt_parser())
     results.append(test_blank_builder())
     results.append(test_quiz_grouping())
+    results.append(test_backward_chunk_ranges())
 
     if args.dry_run:
         passed = sum(results)

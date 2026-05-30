@@ -19,6 +19,7 @@ import asyncio
 import os
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import torch
@@ -37,6 +38,21 @@ COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 WHISPER_GPUS = os.getenv("WHISPER_GPUS", None)
 
 REPLACEMENT_CHAR = "�"
+
+
+def _is_retryable_cuda_error(exc):
+    msg = str(exc).lower()
+    return "cuda failed" in msg or "cuda error" in msg or "invalid argument" in msg
+
+
+def _clear_cuda_cache(gpu_id):
+    if gpu_id is None or gpu_id < 0 or not torch.cuda.is_available():
+        return
+    try:
+        with torch.cuda.device(gpu_id):
+            torch.cuda.empty_cache()
+    except Exception as cache_error:
+        print(f"[Whisper] GPU {gpu_id} cache clear 실패: {cache_error}")
 
 
 # ── 멀티 GPU 워커 풀 ─────────────────────────────────────────────────────────
@@ -161,7 +177,7 @@ gpu_pool.load_models(WHISPER_MODEL_SIZE, COMPUTE_TYPE, gpu_ids=_gpu_ids)
 
 # ── 추론 함수 (동기 — asyncio.to_thread로 호출) ─────────────────────────────
 
-def _do_transcribe(model, tmp_path, language, prompt, filename):
+def _do_transcribe(model, tmp_path, language, prompt, filename, request_id=None, gpu_id=None):
     """동기 Whisper 추론 — GPU 워커 스레드에서 실행."""
     t0 = time.time()
 
@@ -213,7 +229,7 @@ def _do_transcribe(model, tmp_path, language, prompt, filename):
     detected_lang = info.language or language or "ko"
 
     print(
-        f"[Whisper] 추론 완료: {filename} | 단어 {len(words)}개, "
+        f"[Whisper] 추론 완료[{request_id}]: {filename} GPU {gpu_id} | 단어 {len(words)}개, "
         f"세그먼트 {len(segments_out)}개, {duration:.1f}초 분량, "
         f"소요 {elapsed:.1f}초 (x{duration / elapsed:.1f} realtime)"
     )
@@ -245,6 +261,7 @@ async def transcribe(request: Request):
     language = form.get("language") or None
     prompt = form.get("prompt") or None
     response_format = form.get("response_format", "json")
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:8]
 
     suffix = Path(getattr(file, "filename", "audio.mp3")).suffix or ".mp3"
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="whisper_")
@@ -253,27 +270,51 @@ async def transcribe(request: Request):
     gpu_id = None
     try:
         content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="empty audio file")
+
         with open(tmp_path, "wb") as f:
             f.write(content)
 
         filename = getattr(file, 'filename', '?')
         file_mb = len(content) / 1024 / 1024
+        max_attempts = max(1, len(gpu_pool.workers))
+        last_error = None
+        result = None
+        used_gpu_id = None
 
-        # GPU 워커 획득 (빈 GPU가 없으면 대기)
-        gpu_id, model = await gpu_pool.acquire()
-        print(
-            f"[Whisper] 추론 시작: {filename} "
-            f"({file_mb:.1f} MB) lang={language} → GPU {gpu_id}"
-        )
+        for attempt in range(1, max_attempts + 1):
+            # GPU 워커 획득 (빈 GPU가 없으면 대기)
+            gpu_id, model = await gpu_pool.acquire()
+            used_gpu_id = gpu_id
+            print(
+                f"[Whisper] 추론 시작[{request_id}]: {filename} "
+                f"({file_mb:.1f} MB) lang={language} → GPU {gpu_id} "
+                f"(attempt {attempt}/{max_attempts})"
+            )
 
-        # 동기 추론을 별도 스레드에서 실행 (이벤트 루프 블로킹 방지)
-        result = await asyncio.to_thread(
-            _do_transcribe, model, tmp_path, language, prompt, filename
-        )
+            try:
+                # 동기 추론을 별도 스레드에서 실행 (이벤트 루프 블로킹 방지)
+                result = await asyncio.to_thread(
+                    _do_transcribe, model, tmp_path, language, prompt, filename, request_id, gpu_id
+                )
+                gpu_pool.release(gpu_id)
+                gpu_id = None
+                break
+            except Exception as e:
+                last_error = e
+                print(f"[Whisper] 추론 실패[{request_id}]: GPU {gpu_id} | {type(e).__name__}: {e}")
+                _clear_cuda_cache(gpu_id)
+                gpu_pool.release(gpu_id)
+                gpu_id = None
 
-        # GPU 워커 반환
-        gpu_pool.release(gpu_id)
-        gpu_id = None  # finally에서 중복 반환 방지
+                if not _is_retryable_cuda_error(e) or attempt >= max_attempts:
+                    raise
+
+                await asyncio.sleep(0.2)
+
+        if result is None:
+            raise RuntimeError(f"Whisper 추론 실패: {last_error}")
 
         if response_format == "json":
             return JSONResponse({"text": result["text"]})
@@ -289,14 +330,17 @@ async def transcribe(request: Request):
             "segments": result["segments"],
         }
         payload_size = len(_json.dumps(payload))
-        print(f"[Whisper] 응답 전송: {payload_size / 1024:.1f} KB (GPU {gpu_id})")
+        print(f"[Whisper] 응답 전송[{request_id}]: {payload_size / 1024:.1f} KB (GPU {used_gpu_id})")
         return JSONResponse(payload)
 
+    except HTTPException:
+        raise
     except Exception as e:
         # 에러 시에도 GPU 반환
         if gpu_id is not None:
             gpu_pool.release(gpu_id)
-        raise
+        print(f"[Whisper] 요청 실패[{request_id}]: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Whisper inference failed: {e}") from e
 
     finally:
         if os.path.exists(tmp_path):
