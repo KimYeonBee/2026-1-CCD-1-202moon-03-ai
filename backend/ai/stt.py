@@ -305,7 +305,7 @@ def get_gpu_status():
     return {"total_gpus": 1, "free_gpus": 1, "workers": []}
 
 
-def transcribe_parallel(chunk_list, language="ko", stt_prompt=None, title=None):
+def transcribe_parallel(chunk_list, language="ko", stt_prompt=None, title=None, request_id=None):
     """여러 오디오 청크를 Whisper 서버의 빈 GPU에 병렬로 전송하여 STT 수행.
 
     Args:
@@ -342,14 +342,19 @@ def transcribe_parallel(chunk_list, language="ko", stt_prompt=None, title=None):
         parts.append(stt_prompt)
     effective_prompt = " ".join(parts) if parts else None
 
+    log_prefix = f"[TADAC][{request_id}]" if request_id else "[TADAC]"
+
     def _stt_one(chunk_idx, audio_path, offset_sec):
         """단일 청크 STT (스레드에서 실행)."""
         file_size = os.path.getsize(audio_path)
-        print(f"[TADAC] STT chunk {chunk_idx+1}/{len(chunk_list)}: "
+        print(f"{log_prefix} STT chunk {chunk_idx+1}/{len(chunk_list)}: "
               f"{audio_path} ({file_size / 1024 / 1024:.1f} MB, offset={offset_sec:.0f}초)")
 
         result = _run_transcribe(audio_path, language, effective_prompt)
         return chunk_idx, result, offset_sec
+
+    def _is_empty_transcript(result):
+        return not result.get("segments") and not (result.get("text") or "").strip()
 
     results = [None] * len(chunk_list)
 
@@ -361,13 +366,15 @@ def transcribe_parallel(chunk_list, language="ko", stt_prompt=None, title=None):
         try:
             client_limit = max(1, int(WHISPER_CLIENT_MAX_PARALLEL))
         except ValueError:
-            print(f"[TADAC] WHISPER_CLIENT_MAX_PARALLEL 파싱 실패: {WHISPER_CLIENT_MAX_PARALLEL}")
+            print(f"{log_prefix} WHISPER_CLIENT_MAX_PARALLEL 파싱 실패: {WHISPER_CLIENT_MAX_PARALLEL}")
 
     effective_parallel = min(max_parallel, len(chunk_list))
     if client_limit is not None:
         effective_parallel = min(effective_parallel, client_limit)
-        print(f"[TADAC] STT 클라이언트 병렬 제한: {client_limit}")
-    print(f"[TADAC] 병렬 STT 시작: {len(chunk_list)}개 청크, 동시 {effective_parallel}개")
+        print(f"{log_prefix} STT 클라이언트 병렬 제한: {client_limit}")
+    print(f"{log_prefix} 병렬 STT 시작: {len(chunk_list)}개 청크, 동시 {effective_parallel}개")
+
+    failed_chunks = []
 
     with ThreadPoolExecutor(max_workers=effective_parallel) as executor:
         futures = {}
@@ -378,20 +385,40 @@ def transcribe_parallel(chunk_list, language="ko", stt_prompt=None, title=None):
         for future in as_completed(futures):
             try:
                 chunk_idx, result, offset_sec = future.result()
+                if _is_empty_transcript(result):
+                    raise RuntimeError("Whisper가 빈 transcript를 반환함")
                 results[chunk_idx] = (result, offset_sec)
-                print(f"[TADAC] STT chunk {chunk_idx+1} 완료: "
+                print(f"{log_prefix} STT chunk {chunk_idx+1} 완료: "
                       f"세그먼트 {len(result.get('segments', []))}개, "
                       f"단어 {len(result.get('words', []))}개")
             except Exception as e:
                 chunk_idx = futures[future]
-                print(f"[TADAC] STT chunk {chunk_idx+1} 실패: {e}")
-                # 실패한 청크는 빈 결과로 대체
-                results[chunk_idx] = (
-                    {"text": "", "words": [], "segments": [], "language": language},
-                    chunk_list[chunk_idx][1],
-                )
+                print(f"{log_prefix} STT chunk {chunk_idx+1} 실패: {e}")
+                failed_chunks.append((chunk_idx, e))
 
-    print(f"[TADAC] 병렬 STT 완료: {len(chunk_list)}개 청크 처리됨")
+    # 청크 하나를 빈 결과로 대체하면 긴 영상 중간 10분 자막이 통째로 비는
+    # 성공처럼 보이는 실패가 된다. 실패 청크는 단독으로 한 번 더 재시도하고,
+    # 그래도 실패하면 파이프라인을 중단해 재시도 가능한 오류로 드러낸다.
+    if failed_chunks:
+        print(f"{log_prefix} 실패 청크 단독 재시도: {len(failed_chunks)}개")
+    for chunk_idx, first_error in failed_chunks:
+        audio_path, offset_sec = chunk_list[chunk_idx]
+        try:
+            _, result, offset_sec = _stt_one(chunk_idx, audio_path, offset_sec)
+            if _is_empty_transcript(result):
+                raise RuntimeError("Whisper가 빈 transcript를 반환함")
+            results[chunk_idx] = (result, offset_sec)
+            print(f"{log_prefix} STT chunk {chunk_idx+1} 단독 재시도 완료: "
+                  f"세그먼트 {len(result.get('segments', []))}개, "
+                  f"단어 {len(result.get('words', []))}개")
+        except Exception as retry_error:
+            raise RuntimeError(
+                f"STT chunk {chunk_idx+1}/{len(chunk_list)} 실패. "
+                f"중간 자막 누락을 막기 위해 빈 결과로 대체하지 않습니다. "
+                f"첫 오류: {first_error}; 재시도 오류: {retry_error}"
+            ) from retry_error
+
+    print(f"{log_prefix} 병렬 STT 완료: {len(chunk_list)}개 청크 처리됨")
     return results
 
 
