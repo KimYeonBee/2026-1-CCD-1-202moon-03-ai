@@ -67,11 +67,12 @@ def _is_youtube_url(src):
 CHUNK_DURATION_SEC = int(os.getenv("STT_CHUNK_DURATION_SEC", "600"))  # 10분
 STT_MODE = os.getenv("STT_MODE", "single").strip().lower()
 STT_CHUNKING_ENABLED = STT_MODE in {"chunk", "chunked", "parallel"}
+STT_SEQUENTIAL_CHUNKING_ENABLED = STT_MODE in {"sequential_chunk", "chunk_sequential", "streaming_chunk"}
 STT_CHUNK_THRESHOLD_SEC = float(os.getenv("STT_CHUNK_THRESHOLD_SEC", "3600"))  # 60분
 
 print(
     "[TADAC] STT chunk 설정: "
-    f"mode={STT_MODE}, enabled={STT_CHUNKING_ENABLED}, "
+    f"mode={STT_MODE}, parallel={STT_CHUNKING_ENABLED}, sequential={STT_SEQUENTIAL_CHUNKING_ENABLED}, "
     f"threshold={STT_CHUNK_THRESHOLD_SEC/60:.1f}분, "
     f"chunk={CHUNK_DURATION_SEC/60:.1f}분"
 )
@@ -130,6 +131,32 @@ def _split_audio_into_chunks(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
         print(f"[TADAC] chunk {idx}: {offset:.0f}초~{end:.0f}초")
 
     print(f"[TADAC] 오디오 분할 완료: {len(chunks)}개 chunk")
+    return chunks
+
+
+def _split_audio_into_chunks_for_streaming(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
+    """스트리밍용 강제 분할. 10분을 넘으면 앞 청크가 짧아지도록 뒤에서부터 자른다."""
+    total_duration = _probe_audio_duration(audio_path)
+    print(f"[TADAC] 스트리밍 청크 오디오 길이: {total_duration:.1f}초 ({total_duration/60:.1f}분)")
+
+    if total_duration <= chunk_sec:
+        return [(audio_path, 0.0)]
+
+    ranges = _build_backward_chunk_ranges(total_duration, chunk_sec)
+    chunks = []
+    for idx, (offset, end) in enumerate(ranges):
+        chunk_path = os.path.join(tmp_dir, f"stream_chunk_{idx:03d}.mp3")
+        duration = end - offset
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", audio_path,
+             "-ss", str(offset), "-t", str(duration),
+             "-acodec", "mp3", "-loglevel", "quiet", chunk_path],
+            check=True,
+        )
+        chunks.append((chunk_path, offset))
+        print(f"[TADAC] streaming chunk {idx}: {offset:.0f}초~{end:.0f}초")
+
+    print(f"[TADAC] 스트리밍 청크 분할 완료: {len(chunks)}개")
     return chunks
 
 
@@ -480,6 +507,238 @@ def _normalize_quiz(q):
     if not q.get("explanation"):
         q["explanation"] = cf or icf or ""
     return q
+
+
+def _format_time_range(start_sec, end_sec):
+    return f"{start_sec / 60:.1f}분~{end_sec / 60:.1f}분"
+
+
+def _build_chunk_chapters(audio_chunks, total_duration):
+    chapters = []
+    for idx, (_, offset_sec) in enumerate(audio_chunks):
+        if idx + 1 < len(audio_chunks):
+            end_sec = audio_chunks[idx + 1][1]
+        else:
+            end_sec = total_duration
+        chapters.append({
+            "title":     f"Part {idx + 1} ({_format_time_range(offset_sec, end_sec)})",
+            "start_sec": round(offset_sec, 3),
+            "end_sec":   round(end_sec, 3),
+        })
+    return chapters
+
+
+def _apply_offset_and_ids(transcript_result, offset_sec, global_seg_id):
+    """청크 STT 결과를 전체 타임라인 기준으로 보정하고 segment id를 이어 붙인다."""
+    ch_segs = transcript_result.get("segments", [])
+    ch_words = transcript_result.get("words", [])
+
+    for seg in ch_segs:
+        seg["start"] = round(seg.get("start", 0.0) + offset_sec, 3)
+        seg["end"]   = round(seg.get("end", 0.0)   + offset_sec, 3)
+        seg["id"]    = global_seg_id
+        global_seg_id += 1
+
+    for w in ch_words:
+        w["start"] = round(w.get("start", 0.0) + offset_sec, 3)
+        w["end"]   = round(w.get("end", 0.0)   + offset_sec, 3)
+
+    return ch_segs, ch_words, global_seg_id
+
+
+def _run_pipeline_sequential_chunk_streaming(
+    audio_path,
+    language,
+    blanks_per_sentence,
+    fall_speed,
+    lead_time,
+    stt_prompt,
+    refine,
+    content_title,
+    tmp_dirs,
+    request_id=None,
+):
+    """CUDA 병렬 없이 10분 청크를 앞에서부터 STT/교정하여 먼저 흘려보내는 파이프라인."""
+    _t_pipeline_start = _time.time()
+
+    total_duration = _probe_audio_duration(audio_path)
+    chunk_tmp_dir = tempfile.mkdtemp(prefix="tadac_seq_chunks_")
+    tmp_dirs.append(chunk_tmp_dir)
+    audio_chunks = _split_audio_into_chunks_for_streaming(audio_path, chunk_tmp_dir)
+    chunk_chapters = _build_chunk_chapters(audio_chunks, total_duration)
+
+    yield {
+        "type":           "init",
+        "total_duration": round(total_duration, 3),
+        "chapters":       chunk_chapters,
+        "topic_summary":  "",
+        "streaming_mode": "sequential_chunk",
+    }
+
+    all_segments = []
+    all_words = []
+    total_enriched_segments = []
+    global_seg_id = 0
+    log_prefix = f"[TADAC][{request_id}]" if request_id else "[TADAC]"
+
+    for chunk_idx, (chunk_path, offset_sec) in enumerate(audio_chunks):
+        chunk_meta = chunk_chapters[chunk_idx]
+        _t_chunk_start = _time.time()
+        print(f"{log_prefix} 순차 청크 {chunk_idx + 1}/{len(audio_chunks)} STT 시작: {chunk_meta['title']}")
+
+        result = stt_module.transcribe(
+            chunk_path,
+            language=language,
+            stt_prompt=stt_prompt,
+            title=content_title,
+        )
+        ch_segs, ch_words, global_seg_id = _apply_offset_and_ids(result, offset_sec, global_seg_id)
+        if not ch_segs:
+            print(f"{log_prefix} 순차 청크 {chunk_idx + 1}: 세그먼트 없음")
+            continue
+
+        all_segments.extend(ch_segs)
+        all_words.extend(ch_words)
+
+        if refine:
+            summary_hint = (
+                f"영상 제목: {content_title or '알 수 없음'}\n"
+                f"현재 청크: {chunk_meta['title']}\n"
+                "전체 챕터 분석 전이므로 이 청크 안에서만 자막 교정과 빈칸 키워드를 처리한다."
+            )
+            combined_result = combined_processor.process_chapter_unified(
+                ch_segs,
+                summary_hint,
+                chunk_meta["title"],
+                blanks_per_sentence=blanks_per_sentence,
+                global_keywords=None,
+                questions_count=0,
+            )
+            ch_enriched = _apply_gpt_results(ch_segs, combined_result, ch_words, {})
+            ch_summary = (combined_result.get("chapter_summary") or "").strip()
+        else:
+            ch_transcript = {
+                "text": " ".join(seg.get("text", "") for seg in ch_segs),
+                "words": ch_words,
+                "segments": ch_segs,
+                "language": language,
+            }
+            ch_enriched = keyword_extractor.extract_keywords(
+                ch_transcript, blanks_per_sentence=blanks_per_sentence
+            )
+            ch_summary = ""
+
+        total_enriched_segments.extend(ch_enriched)
+        ch_game_data = blank_subtitle.build_game_data(
+            ch_enriched,
+            fall_speed=fall_speed,
+            lead_time=lead_time,
+        )
+        ch_corrected = _build_corrected_subtitle_data(ch_enriched)
+
+        print(f"{log_prefix} 순차 청크 {chunk_idx + 1} 완료: {_time.time() - _t_chunk_start:.1f}초")
+        yield {
+            "type":                "chapter_ready",
+            "chapter_index":       chunk_idx,
+            "chapter_title":       chunk_meta["title"],
+            "chapter_summary":     ch_summary,
+            "corrected_subtitles": ch_corrected.get("subtitles", []),
+            "subtitles":           ch_game_data.get("subtitles", []),
+            "fall_events":         ch_game_data.get("fall_events", []),
+            "quizzes":             [],
+            "streaming_mode":      "sequential_chunk",
+        }
+
+    if not all_segments:
+        raise ValueError("세그먼트가 없어 게임 데이터를 만들 수 없음")
+
+    full_transcript = {
+        "text":     " ".join(seg.get("text", "") for seg in all_segments),
+        "words":    all_words,
+        "segments": all_segments,
+        "language": language,
+    }
+    _log_large_transcript_gaps(all_segments)
+    _save_raw_transcript(full_transcript)
+
+    print(f"{log_prefix} 전체 STT 완료 후 챕터/퀴즈 분석 시작")
+    _t_analysis_start = _time.time()
+    if refine:
+        summary, chapters, name_corrections, global_keywords, topic_summary = (
+            transcript_refiner._analyze_content(all_segments, title=content_title)
+        )
+    else:
+        summary = ""
+        name_corrections = {}
+        global_keywords = []
+        chapters, topic_summary = transcript_refiner.analyze_chapters_only(full_transcript)
+
+    chapter_segments_map = quiz_generator._map_segments_to_chapters(all_segments, chapters)
+    all_quizzes = []
+    chapter_summaries = []
+
+    for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
+        if not ch_segs:
+            continue
+
+        if refine and summary:
+            combined_result = combined_processor.process_chapter_unified(
+                ch_segs,
+                summary,
+                chapter["title"],
+                blanks_per_sentence=blanks_per_sentence,
+                global_keywords=global_keywords,
+                questions_count=3,
+            )
+            ch_quizzes = combined_result.get("quizzes", [])
+            ch_summary = (combined_result.get("chapter_summary") or "").strip()
+            if ch_summary:
+                chapter_summaries.append((chapter["title"], ch_summary))
+        else:
+            ch_quizzes = quiz_generator.generate_quizzes(ch_segs, chapters=[chapter])
+            ch_summary = ""
+
+        last_seg = ch_segs[-1] if ch_segs else {}
+        trigger_time = last_seg.get("end", 0.0)
+        seg_id_start = ch_segs[0].get("id", 0) if ch_segs else 0
+        seg_id_end = last_seg.get("id", 0)
+
+        for q in ch_quizzes:
+            _normalize_quiz(q)
+            q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
+            q["chapter_index"] = ch_idx
+            q["chapter_title"] = chapter["title"]
+            q["trigger_time"] = round(trigger_time, 3)
+            q["segment_range"] = [seg_id_start, seg_id_end]
+
+        all_quizzes.extend(ch_quizzes)
+
+    print(f"{log_prefix} 챕터/퀴즈 분석 완료: {_time.time() - _t_analysis_start:.1f}초")
+    yield {
+        "type":          "analysis_ready",
+        "chapters":      chapters,
+        "quizzes":       all_quizzes,
+        "ai_summary":    _compose_ai_summary(topic_summary, chapter_summaries),
+        "topic_summary": topic_summary,
+    }
+
+    _t_total = _time.time() - _t_pipeline_start
+    print(f"{log_prefix} 순차 청크 파이프라인 완료: {_t_total:.1f}초")
+    yield {
+        "type":       "complete",
+        "ai_summary": _compose_ai_summary(topic_summary, chapter_summaries),
+        "chapters":   chapters,
+        "quizzes":    all_quizzes,
+        "stats": {
+            "transcript_source": "whisper",
+            "total_words":       len(all_words),
+            "language":          language,
+            "gpt_refined":       refine,
+            "total_quizzes":     len(all_quizzes),
+            "total_segments":    len(total_enriched_segments),
+            "streaming_mode":    "sequential_chunk",
+        },
+    }
 
 
 def _branch_output_paths(output_path):
@@ -1168,6 +1427,22 @@ def run_pipeline_chunked_streaming(
             else:
                 print(f"[TADAC] [chunked] 입력: 로컬 오디오 ({suffix})")
 
+        if STT_SEQUENTIAL_CHUNKING_ENABLED:
+            print("[TADAC] [chunked] 순차 청크 스트리밍 모드 사용")
+            yield from _run_pipeline_sequential_chunk_streaming(
+                audio_path           = audio_path,
+                language             = language,
+                blanks_per_sentence  = blanks_per_sentence,
+                fall_speed           = fall_speed,
+                lead_time            = lead_time,
+                stt_prompt           = stt_prompt,
+                refine               = refine,
+                content_title        = content_title,
+                tmp_dirs             = tmp_dirs,
+                request_id           = request_id,
+            )
+            return
+
         # ── Phase 1: STT (기본 단일 파일, 옵션 청크 병렬) ───────────────────
         full_transcript = _transcribe_auto_parallel(
             audio_path, language, stt_prompt, content_title, tmp_dirs, request_id=request_id
@@ -1407,10 +1682,18 @@ def main():
                 aggregated_blank_game_data["subtitles"].extend(event.get("subtitles", []))
                 aggregated_blank_game_data["fall_events"].extend(event.get("fall_events", []))
                 aggregated_blank_game_data["quizzes"].extend(event.get("quizzes", []))
+            elif event["type"] == "analysis_ready":
+                aggregated_blank_game_data["chapters"] = event.get("chapters", [])
+                aggregated_blank_game_data["quizzes"] = event.get("quizzes", [])
+                aggregated_blank_game_data["ai_summary"] = event.get("ai_summary", "")
             elif event["type"] == "complete":
                 aggregated_corrected_subtitle_data["stats"] = event.get("stats", {})
                 aggregated_blank_game_data["stats"] = event.get("stats", {})
                 aggregated_blank_game_data["ai_summary"] = event.get("ai_summary", "")
+                if event.get("chapters"):
+                    aggregated_blank_game_data["chapters"] = event.get("chapters", [])
+                if event.get("quizzes"):
+                    aggregated_blank_game_data["quizzes"] = event.get("quizzes", [])
 
         print("[TADAC] 스트리밍 완료")
 
