@@ -1,122 +1,64 @@
 [
   {
-    "concept": "대기의 구성과 중력의 관계를 통해 대기의 층상 구조를 이해하기 위한 복습.",
-    "opening": "대기는 지구를 감싸고 있는 기체 공기입니다.",
-    "script": "대기는 지구를 둘러싼 기체로, 중력에 의해 붙잡혀 있습니다. 공기의 78%는 질소, 21%는 산소로 이루어져 있죠. 나머지 1%는 아르곤과 이산화탄소로 구성되어 있습니다. 이로써 대기의 구성과 층상 구조를 이해할 수 있습니다.",
+    "concept": "인도사의 주요 왕조와 종교 발전 과정을 통해 인도 문화의 변천사를 복습한다.",
+    "opening": "인도의 왕조와 종교, 이 두 가지가 어떻게 발전해 왔는지 알아봅시다.",
+    "script": "인도는 마우리아 왕조와 쿠샨 왕조를 통해 강력한 국가 체제를 구축했습니다. 이 과정에서 불교와 자이나교가 등장하며 문화의 다양성을 이끌어냈습니다. 인도사의 흐름을 통해 이 두 왕조의 중요성을 기억하세요.",
     "scenes": [
       {
         "scene_number": 1,
-        "narration": "대기는 지구를 감싸는 기체입니다. 중력 덕분에 공기가 붙잡혀 있죠.",
-        "video_prompt": "Visual: A giant earth surrounded by swirling clouds of colorful gases. | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"The atmosphere is a blanket of gases hugging the Earth.\" Soft ambient music. | Style: Bright colors, animated style, educational tone."
+        "narration": "마우리아 왕조의 왕이 황금 왕관을 쓰고 강력한 군대를 이끌며 인도를 정복하는 장면입니다.",
+        "video_prompt": "Visual: A majestic king in a golden crown leads an army in vibrant traditional attire, marching through a lush Indian landscape | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"The Maurya Dynasty conquered vast lands, establishing a powerful empire.\" Dramatic orchestral music | Style: Rich colors, epic animation style, heroic mood, no text, no written language, no watermarks"
       },
       {
         "scene_number": 2,
-        "narration": "공기의 78%는 질소, 21%는 산소입니다. 이게 바로 우리의 대기죠.",
-        "video_prompt": "Visual: A giant nitrogen balloon (labeled 78%) floating above a smaller oxygen balloon (labeled 21%). | Camera: Medium close-up, slow zoom in | Audio: Warm Korean male voiceover says: \"Nitrogen is the king of the atmosphere with 78 percent!\" Upbeat quirky background music. | Style: Cartoonish animation, playful tone."
+        "narration": "쿠샨 왕조의 상인이 무역로에서 다양한 문화와 상품을 교환하는 장면입니다.",
+        "video_prompt": "Visual: A merchant from the Kushan Dynasty, adorned in colorful attire, trading exotic goods with travelers in a bustling marketplace | Camera: Medium close-up, slow dolly in | Audio: Warm Korean male voiceover says: \"The Kushan Dynasty thrived on trade, connecting cultures across continents.\" Upbeat world music | Style: Bright colors, lively animation, cultural exchange theme, no text, no written language, no watermarks"
       },
       {
         "scene_number": 3,
-        "narration": "남은 1%는 아르곤과 이산화탄소로 채워져 있습니다. 소중한 비율이죠.",
-        "video_prompt": "Visual: A tiny jar labeled '1%' containing small colorful balls representing argon and carbon dioxide. | Camera: Close-up, static | Audio: Warm Korean male voiceover says: \"The remaining 1% is a rare mix of gases, making it special!\" Lighthearted background music. | Style: Minimalistic, animated style."
+        "narration": "불교의 창시자가 고요한 명상 속에서 깨달음을 얻는 장면입니다.",
+        "video_prompt": "Visual: A serene figure in simple robes sits cross-legged under a large tree, radiating a tranquil light as enlightenment dawns | Camera: Close-up, soft focus | Audio: Warm Korean male voiceover says: \"Buddhism emerged from deep reflections, offering new spiritual paths.\" Calming nature sounds | Style: Soft, pastel colors, meditative animation style, peaceful mood, no text, no written language, no watermarks"
       },
       {
         "scene_number": 4,
-        "narration": "이렇게 대기를 이해하면 지구의 기후도 쉽게 알 수 있습니다.",
-        "video_prompt": "Visual: A globe spinning with various weather icons (sun, clouds, rain) appearing around it. | Camera: Wide shot, slow rotation | Audio: Warm Korean male voiceover says: \"Understanding the atmosphere gives us insight into Earth's climate!\" Inspirational background music. | Style: Cinematic look, informative tone."
+        "narration": "자이나교의 승려가 평화롭게 자연과 소통하며 수행하는 장면입니다.",
+        "video_prompt": "Visual: A Jain monk in simple attire walks barefoot through a vibrant forest, gently interacting with animals and nature | Camera: Tracking shot following the monk | Audio: Warm Korean male voiceover says: \"Jainism promotes non-violence and harmony with all living beings.\" Gentle instrumental music | Style: Earthy tones, soothing animation, harmonious theme, no text, no written language, no watermarks"
       }
     ],
-    "memory_point": "대기의 78%는 질소, 21%는 산소, 나머지 1%는 아르곤과 이산화탄소로 구성되어 있습니다.",
+    "memory_point": "마우리아 왕조와 쿠샨 왕조는 인도문화의 발전을 이끌었습니다.",
     "chapter_index": 0,
-    "chapter_title": "대기의 개념과 구성"
+    "chapter_title": "Part 1 (0.0분~7.5분)",
+    "video_path": "/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/final_shorts_ch0.mp4"
   },
   {
-    "concept": "지구 대기의 층상 구조를 이해하기 위한 기초 지식과 기온 분포에 따른 분류를 복습합니다.",
-    "opening": "대기는 마치 케이크처럼 층층이 쌓여 있습니다.",
-    "script": "지구 대기는 높이에 따라 네 개의 층으로 나뉩니다. 대류권, 성층권, 중간권, 열권. 대류권은 우리가 사는 곳으로, 약 11km까지 이어집니다. 그 위가 성층권, 중간권, 열권입니다. 기온이 높아지거나 낮아지는 방식으로 각각의 층이 형성됩니다.",
+    "concept": "인도사의 주요 왕조와 종교 발전을 복습하며 핵심 개념을 기억하는 데 도움을 주기 위해 캐릭터화하고 시각적으로 표현합니다.",
+    "opening": "인도사의 중요한 왕조와 종교를 만나보세요.",
+    "script": "인도사의 마우리아 왕조는 찬드라굽타가 세웠고, 아소카왕의 석주와 상좌부불교, 산치대탑이 중요합니다. 쿠샨 왕조는 카니슈카가 대승불교를 퍼뜨렸고, 간다라 양식 불상이 제작되었습니다.",
     "scenes": [
       {
         "scene_number": 1,
-        "narration": "지구 대기는 마치 층층이 쌓인 케이크처럼 나뉘어 있습니다.",
-        "video_prompt": "Visual: A giant cake with layers labeled '대류권', '성층권', '중간권', '열권' | Camera: Wide shot, static | Audio: Warm Korean male voiceover says: \"The Earth's atmosphere is like a layered cake divided into sections.\" Soft whimsical music. | Style: Bright saturated colors, cartoon animation style, humorous tone"
+        "narration": "마우리아 왕조는 찬드라굽타가 세웠고 아소카왕이 중요한 역할을 했습니다.",
+        "video_prompt": "Visual: A majestic king in traditional Indian attire, crowned and holding a scepter, stands proudly before a large stone pillar. | Camera: Medium close-up, slowly zooming in on the king. | Audio: Warm Korean male voiceover says: \"The Maurya Dynasty was founded by Chandragupta and highlighted by King Ashoka.\" Upbeat historical music. | Style: Bright colors, stylized animation, educational tone, no text, no written language, no watermarks."
       },
       {
         "scene_number": 2,
-        "narration": "대류권은 우리가 사는 곳, 최대 11km까지 이어집니다.",
-        "video_prompt": "Visual: A bustling city skyline up to 11km high with a giant '대류권' sign hovering above | Camera: Medium close-up, slow dolly in | Audio: Warm Korean male voiceover says: \"The troposphere is where we live, reaching up to 11 kilometers high.\" Upbeat quirky background music. | Style: Bright colors, cartoon animation style, lively mood"
+        "narration": "아소카왕의 석주와 불교 포교, 산치대탑이 중요합니다.",
+        "video_prompt": "Visual: A wise king gestures toward a towering stone pillar inscribed with symbols, with a backdrop of a grand stupa. | Camera: Wide shot, showcasing the pillar and stupa in the background. | Audio: Warm Korean male voiceover says: \"Ashoka's stone pillars symbolize his Buddhist teachings and the first stupa at Sanchi.\" Inspirational music. | Style: Richly colored, 3D animation, informative mood, no text, no written language, no watermarks."
       },
       {
         "scene_number": 3,
-        "narration": "그 위는 성층권과 중간권, 열권으로 나뉩니다.",
-        "video_prompt": "Visual: Animated layers of the atmosphere with labels popping up as they are mentioned | Camera: Wide shot, panning up | Audio: Warm Korean male voiceover says: \"Above it are the stratosphere, mesosphere, and thermosphere layers.\" Light atmospheric music. | Style: Soft colors, 2D animation style, educational tone"
+        "narration": "쿠샨 왕조는 카니슈카가 대승불교를 퍼뜨렸습니다.",
+        "video_prompt": "Visual: A regal figure with a golden crown and ornate robe stands amidst followers, spreading teachings and pointing to a large statue of Buddha. | Camera: Low-angle shot, capturing the grandeur of the king and the statue. | Audio: Warm Korean male voiceover says: \"The Kushan Dynasty, led by Kanishka, promoted Mahayana Buddhism.\" Triumphant music. | Style: Vibrant animation, epic tone, no text, no written language, no watermarks."
       },
       {
         "scene_number": 4,
-        "narration": "기온이 높아지거나 낮아지는 방식으로 각각의 층이 형성됩니다.",
-        "video_prompt": "Visual: Thermometer graphic showing temperature changes at different atmospheric layers | Camera: Close-up, static | Audio: Warm Korean male voiceover says: \"The layers form based on how temperature changes with height.\" Calm educational background music. | Style: Clean graphics, informative tone"
+        "narration": "간다라 양식의 불상이 제작되었습니다.",
+        "video_prompt": "Visual: An artisan chisels a statue of Buddha, surrounded by ancient Greek-inspired architecture and intricate carvings. | Camera: Medium shot, focusing on the artisan's skillful hands. | Audio: Warm Korean male voiceover says: \"The Gandhara style emerged, creating the first Buddhist statues influenced by Hellenism.\" Artistic music. | Style: Detailed animation, cultural richness, no text, no written language, no watermarks."
       }
     ],
-    "memory_point": "대기는 높이에 따라 대류권, 성층권, 중간권, 열권으로 나뉜다.",
+    "memory_point": "마우리아 왕조 - 아소카의 석주, 상좌부불교, 산치대탑 / 쿠샨 왕조 - 카니슈카, 대승불교, 간다라 양식 불상",
     "chapter_index": 1,
-    "chapter_title": "대기의 층상 구조 개요"
-  },
-  {
-    "concept": "대기의 층상 구조와 기온 변화는 태양 에너지의 영향을 받는다. 기온의 상승과 하강은 대기의 밀도와 오존층의 역할로 설명된다.",
-    "opening": "대기의 기온 변화, 그 원인은 태양과 오존이다.",
-    "script": "기온은 지구 표면에서 시작해 위로 올라갈수록 점점 낮아진다. 하지만, 성층권에 있는 오존층 덕분에 자외선을 차단해 지구를 보호한다. 그래서 기온 변화가 생기는 거야.",
-    "scenes": [
-      {
-        "scene_number": 1,
-        "narration": "기온은 지표면에서 높고 위로 갈수록 낮아진다, 왜일까?",
-        "video_prompt": "Visual: A cartoon Earth with a thermometer showing temperature drop as we move upward. | Camera: Medium close-up, static. | Audio: Warm Korean male voiceover says: \"Temperature starts high at the surface and drops as we rise up.\" Light scientific music. | Style: Bright colors, animated style, educational tone."
-      },
-      {
-        "scene_number": 2,
-        "narration": "산 꼭대기에 눈이 쌓이는 이유는 기온이 낮아지기 때문이다.",
-        "video_prompt": "Visual: A cartoon mountain with snow on the peak, while below is a sunny green valley. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"Snow on mountain peaks shows how temperature decreases with altitude.\" Upbeat background music. | Style: Vibrant colors, playful animation, informative mood."
-      },
-      {
-        "scene_number": 3,
-        "narration": "그럼 왜 성층권에서 기온이 올라갈까? 오존 덕분이야!",
-        "video_prompt": "Visual: A giant cartoon ozone molecule with three oxygen atoms smiling, blocking harmful rays from the sun. | Camera: Close-up, slow zoom in. | Audio: Warm Korean male voiceover says: \"Ozone absorbs harmful UV rays, warming the stratosphere!\" Light and cheerful background music. | Style: Colorful animation, fun and educational tone."
-      },
-      {
-        "scene_number": 4,
-        "narration": "오존층이 없었다면 지구는 생명이 살기 힘든 곳이었을 거야.",
-        "video_prompt": "Visual: A barren, lifeless Earth without an ozone layer contrasted with a vibrant Earth with life. | Camera: Wide shot, panning across both scenes. | Audio: Warm Korean male voiceover says: \"Without ozone, Earth would be lifeless, but it allows life to thrive!\" Dramatic and uplifting music. | Style: Contrast in colors, cinematic animation, impactful mood."
-      }
-    ],
-    "memory_point": "기온은 지표면에서 높고, 위로 올라갈수록 낮아진다; 오존층이 기온을 변화시킨다.",
-    "chapter_index": 2,
-    "chapter_title": "기온 변화와 태양 에너지의 영향"
-  },
-  {
-    "concept": "대기의 층상 구조와 각 층의 특징을 통해 기온 변화의 원리를 기억하게 한다.",
-    "opening": "대기의 각 층, 그 속의 비밀이 궁금하신가요?",
-    "script": "대기층은 마치 케이크처럼 층이 나뉘어져 있어요. 대류권은 수증기가 가득해 기온이 내려가고, 성층권은 오존으로 보호받아 공기가 안정돼요. 중간권은 온도가 다시 떨어지며, 열권은 태양에 가까워져 뜨겁죠. 이런 구조를 기억하세요!",
-    "scenes": [
-      {
-        "scene_number": 1,
-        "narration": "대기층은 마치 층으로 쌓인 케이크 같아요. 아래는 촉촉하고 위로 갈수록 단단해지죠.",
-        "video_prompt": "Visual: A giant multi-layered cake with fluffy clouds at the bottom and solid layers at the top. | Camera: Wide shot, static. | Audio: Warm Korean male voiceover says: \"The atmosphere is like a cake, soft at the bottom, solid at the top.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
-      },
-      {
-        "scene_number": 2,
-        "narration": "대류권은 수증기로 가득 차 기온이 낮아지고, 성층권은 오존 덕분에 안정적이에요.",
-        "video_prompt": "Visual: A bustling water park with people splashing in the lower layers and a calm hot air balloon floating in the stable upper layer. | Camera: Medium close-up, slow dolly in. | Audio: Warm Korean male voiceover says: \"In the troposphere, water vapor lowers temperature, while the stratosphere is stable due to ozone.\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
-      },
-      {
-        "scene_number": 3,
-        "narration": "중간권은 다시 기온이 떨어지고, 열권은 태양에 가까워져 뜨거워진답니다.",
-        "video_prompt": "Visual: An adventurous astronaut getting cooler as he climbs up a mountain, only to sweat heavily near the sun, with exaggerated expressions. | Camera: Low-angle tracking shot moving up. | Audio: Warm Korean male voiceover says: \"As we rise into the mesosphere it cools down, but in the thermosphere, it gets scorching hot!\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
-      },
-      {
-        "scene_number": 4,
-        "narration": "이렇게 각 대기층의 특징을 기억하세요! 기온 변화의 비밀이 담겨 있답니다.",
-        "video_prompt": "Visual: A quirky map showing the different atmospheric layers with animated arrows indicating temperature changes and fun facts. | Camera: Medium shot, static. | Audio: Warm Korean male voiceover says: \"Remember the characteristics of each atmospheric layer; they hold the secrets of temperature changes!\" Upbeat quirky background music. | Style: Bright saturated colors, cartoon animation style, comedic tone."
-      }
-    ],
-    "memory_point": "대기층은 케이크처럼, 아래는 차갑고 위로 갈수록 따뜻해진다!",
-    "chapter_index": 3,
-    "chapter_title": "각 대기층의 특징과 오존의 역할"
+    "chapter_title": "Part 2 (7.5분~17.5분)",
+    "video_path": "/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/final_shorts_ch1.mp4"
   }
 ]

@@ -24,6 +24,10 @@ from pathlib import Path
 
 import torch
 from faster_whisper import WhisperModel
+try:
+    from faster_whisper import BatchedInferencePipeline
+except ImportError:
+    BatchedInferencePipeline = None
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -32,6 +36,7 @@ app = FastAPI(title="TADAC Whisper STT Server", version="3.0.0")
 # ── 설정 ─────────────────────────────────────────────────────────────────────
 WHISPER_MODEL_SIZE = "/home/202moon/whisper_server/faster-whisper-large-v3"
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
+WHISPER_BATCH_SIZE = int(os.getenv("WHISPER_BATCH_SIZE", "1"))
 
 # 특정 GPU만 사용하려면 환경변수로 지정 (예: "0,2" → GPU 0, 2만 사용)
 # 미설정 시 사용 가능한 모든 GPU 사용
@@ -66,7 +71,7 @@ class GPUWorkerPool:
     """
 
     def __init__(self):
-        self.workers = {}      # gpu_id → {"model": WhisperModel, "gpu_name": str}
+        self.workers = {}      # gpu_id → {"model": WhisperModel, "gpu_name": str, "batch_size": int}
         self._queue = None     # asyncio.Queue — event loop 안에서 초기화
 
     def load_models(self, model_size, compute_type, gpu_ids=None):
@@ -75,7 +80,7 @@ class GPUWorkerPool:
             # CPU 폴백
             print(f"[Whisper] CUDA 사용 불가 → CPU 모드")
             model = WhisperModel(model_size, device="cpu", compute_type="int8")
-            self.workers[-1] = {"model": model, "gpu_name": "CPU"}
+            self.workers[-1] = {"model": model, "gpu_name": "CPU", "batch_size": 1}
             print(f"[Whisper] CPU 워커 로드 완료")
             return
 
@@ -90,7 +95,15 @@ class GPUWorkerPool:
         if not target_gpus:
             raise RuntimeError(f"사용 가능한 GPU 없음. 전체: {available_gpus}, 요청: {gpu_ids}")
 
-        print(f"[Whisper] 멀티 GPU 모델 로딩: {model_size} × {len(target_gpus)}대 ({compute_type})")
+        batch_size = max(1, WHISPER_BATCH_SIZE)
+        use_batched = batch_size > 1 and BatchedInferencePipeline is not None
+        if batch_size > 1 and BatchedInferencePipeline is None:
+            print("[Whisper] BatchedInferencePipeline 미지원 버전 → 일반 추론으로 폴백")
+
+        print(
+            f"[Whisper] 멀티 GPU 모델 로딩: {model_size} × {len(target_gpus)}대 "
+            f"({compute_type}, batch_size={batch_size if use_batched else 1})"
+        )
 
         for gpu_id in target_gpus:
             gpu_name = torch.cuda.get_device_name(gpu_id)
@@ -102,7 +115,13 @@ class GPUWorkerPool:
                     device_index=gpu_id,
                     compute_type=compute_type,
                 )
-                self.workers[gpu_id] = {"model": model, "gpu_name": gpu_name}
+                if use_batched:
+                    model = BatchedInferencePipeline(model=model)
+                self.workers[gpu_id] = {
+                    "model": model,
+                    "gpu_name": gpu_name,
+                    "batch_size": batch_size if use_batched else 1,
+                }
                 print(f"[Whisper]   GPU {gpu_id} ({gpu_name}) 로딩 완료 ✓")
             except Exception as e:
                 print(f"[Whisper]   GPU {gpu_id} ({gpu_name}) 로딩 실패: {e}")
@@ -123,7 +142,8 @@ class GPUWorkerPool:
         """빈 GPU 워커를 가져온다. 모두 바쁘면 하나가 끝날 때까지 대기."""
         self._ensure_queue()
         gpu_id = await self._queue.get()
-        return gpu_id, self.workers[gpu_id]["model"]
+        worker = self.workers[gpu_id]
+        return gpu_id, worker["model"], worker.get("batch_size", 1)
 
     def release(self, gpu_id):
         """사용 완료된 GPU를 풀에 반환."""
@@ -150,6 +170,7 @@ class GPUWorkerPool:
                 "gpu_id":   gpu_id,
                 "gpu_name": info["gpu_name"],
                 "busy":     gpu_id not in free_ids,
+                "batch_size": info.get("batch_size", 1),
             })
 
         return {
@@ -177,12 +198,11 @@ gpu_pool.load_models(WHISPER_MODEL_SIZE, COMPUTE_TYPE, gpu_ids=_gpu_ids)
 
 # ── 추론 함수 (동기 — asyncio.to_thread로 호출) ─────────────────────────────
 
-def _do_transcribe(model, tmp_path, language, prompt, filename, request_id=None, gpu_id=None):
+def _do_transcribe(model, tmp_path, language, prompt, filename, request_id=None, gpu_id=None, batch_size=1):
     """동기 Whisper 추론 — GPU 워커 스레드에서 실행."""
     t0 = time.time()
 
-    segments_iter, info = model.transcribe(
-        tmp_path,
+    transcribe_kwargs = dict(
         language=language,
         initial_prompt=prompt,
         word_timestamps=False,
@@ -190,6 +210,10 @@ def _do_transcribe(model, tmp_path, language, prompt, filename, request_id=None,
         vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=500),
     )
+    if batch_size > 1:
+        transcribe_kwargs["batch_size"] = batch_size
+
+    segments_iter, info = model.transcribe(tmp_path, **transcribe_kwargs)
 
     text_parts = []
     words = []
@@ -285,18 +309,18 @@ async def transcribe(request: Request):
 
         for attempt in range(1, max_attempts + 1):
             # GPU 워커 획득 (빈 GPU가 없으면 대기)
-            gpu_id, model = await gpu_pool.acquire()
+            gpu_id, model, batch_size = await gpu_pool.acquire()
             used_gpu_id = gpu_id
             print(
                 f"[Whisper] 추론 시작[{request_id}]: {filename} "
                 f"({file_mb:.1f} MB) lang={language} → GPU {gpu_id} "
-                f"(attempt {attempt}/{max_attempts})"
+                f"batch={batch_size} (attempt {attempt}/{max_attempts})"
             )
 
             try:
                 # 동기 추론을 별도 스레드에서 실행 (이벤트 루프 블로킹 방지)
                 result = await asyncio.to_thread(
-                    _do_transcribe, model, tmp_path, language, prompt, filename, request_id, gpu_id
+                    _do_transcribe, model, tmp_path, language, prompt, filename, request_id, gpu_id, batch_size
                 )
                 gpu_pool.release(gpu_id)
                 gpu_id = None
@@ -361,6 +385,7 @@ async def health():
         "status": "ok",
         "model": WHISPER_MODEL_SIZE,
         "compute_type": COMPUTE_TYPE,
+        "batch_size": WHISPER_BATCH_SIZE,
         "engine": "faster-whisper",
         "gpus": status,
     }
