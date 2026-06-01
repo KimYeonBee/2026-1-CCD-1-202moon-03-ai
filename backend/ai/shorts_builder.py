@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 FAL_MODEL = "fal-ai/veo2"
+FAL_VIDEO_DURATION = os.getenv("FAL_VIDEO_DURATION", "8s")
 TTS_MODEL = "tts-1-hd"
 TTS_VOICE = "onyx"
 
@@ -37,6 +38,16 @@ NO_TEXT_SUFFIX = (
 
 def _safe_prompt(prompt):
     return prompt + NO_TEXT_SUFFIX
+
+
+def _fal_duration(value):
+    value = str(value or "8s").strip()
+    if value in {"5", "6", "7", "8"}:
+        value = f"{value}s"
+    if value not in {"5s", "6s", "7s", "8s"}:
+        print(f"    [Video] 지원하지 않는 FAL_VIDEO_DURATION={value!r} → 8s 사용")
+        return "8s"
+    return value
 
 
 def _get_duration(file_path):
@@ -82,7 +93,7 @@ def generate_video(prompt, output_path):
             arguments={
                 "prompt": safe,
                 "aspect_ratio": "9:16",
-                "duration": "5",
+                "duration": _fal_duration(FAL_VIDEO_DURATION),
             }
         )
         url = result['video']['url']
@@ -102,7 +113,8 @@ def merge_video_audio(video_path, audio_path, output_path):
     """
     영상 + TTS 나레이션을 합성한다.
     - 오디오가 영상보다 길면: 영상 마지막 프레임을 정지시켜 오디오 끝까지 연장
-    - 오디오가 영상보다 짧으면: 영상을 오디오 길이에 맞춰 자름
+    - 오디오가 영상보다 짧으면: 오디오를 무음으로 채워 영상 길이를 유지
+    - 최종 재생 호환성을 위해 AAC 44.1kHz stereo로 정규화
     """
     audio_dur = _get_duration(audio_path)
     video_dur = _get_duration(video_path)
@@ -114,6 +126,7 @@ def merge_video_audio(video_path, audio_path, output_path):
             "-i", video_path,
             "-i", audio_path,
             "-c:v", "libx264", "-c:a", "aac",
+            "-ar", "44100", "-ac", "2", "-b:a", "128k",
             "-map", "0:v:0", "-map", "1:a:0",
             "-shortest",
             output_path,
@@ -128,17 +141,20 @@ def merge_video_audio(video_path, audio_path, output_path):
             f"[0:v]tpad=stop_mode=clone:stop_duration={audio_dur - video_dur:.2f}[v]",
             "-map", "[v]", "-map", "1:a:0",
             "-c:v", "libx264", "-c:a", "aac",
+            "-ar", "44100", "-ac", "2", "-b:a", "128k",
             "-shortest",
             output_path,
         ]
     else:
-        # 영상이 더 길면 → 오디오 끝에서 자름
+        # 영상이 더 길면 → 오디오는 무음으로 채우고 영상 길이는 유지
         cmd = [
             "ffmpeg", "-y", "-loglevel", "quiet",
             "-i", video_path,
             "-i", audio_path,
+            "-filter_complex", "[1:a]apad[a]",
             "-c:v", "libx264", "-c:a", "aac",
-            "-map", "0:v:0", "-map", "1:a:0",
+            "-ar", "44100", "-ac", "2", "-b:a", "128k",
+            "-map", "0:v:0", "-map", "[a]",
             "-shortest",
             output_path,
         ]
@@ -188,15 +204,14 @@ def build_chapter_videos(chapter_data, output_dir="shorts_rendered"):
         print(f"  - [씬 {s_idx}/4] 처리 시작")
 
         # 1. 영상 생성
-        if not os.path.exists(raw_video):
-            generate_video(vp, raw_video)
+        generate_video(vp, raw_video)
 
         # 2. TTS 나레이션 생성
-        if narration and not os.path.exists(tts_audio):
+        if narration:
             generate_tts(narration, tts_audio)
 
         # 3. 영상 + 나레이션 합성
-        if narration and os.path.exists(tts_audio) and not os.path.exists(merged):
+        if narration and os.path.exists(tts_audio):
             merge_video_audio(raw_video, tts_audio, merged)
 
         final_scene = merged if os.path.exists(merged) else raw_video
@@ -216,7 +231,14 @@ def build_chapter_videos(chapter_data, output_dir="shorts_rendered"):
         "-f", "concat",
         "-safe", "0",
         "-i", concat_list_path,
-        "-c", "copy",
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-ar", "44100",
+        "-ac", "2",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
         final_output
     ]
     subprocess.run(concat_cmd, check=True)

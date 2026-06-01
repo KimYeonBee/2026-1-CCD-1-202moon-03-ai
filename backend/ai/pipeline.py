@@ -134,30 +134,35 @@ def _split_audio_into_chunks(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
     return chunks
 
 
-def _split_audio_into_chunks_for_streaming(audio_path, tmp_dir, chunk_sec=CHUNK_DURATION_SEC):
-    """스트리밍용 강제 분할. 10분을 넘으면 앞 청크가 짧아지도록 뒤에서부터 자른다."""
+def _build_streaming_chunk_ranges(audio_path, chunk_sec=CHUNK_DURATION_SEC):
+    """스트리밍용 청크 범위 계산. 10분을 넘으면 앞 청크가 짧아지도록 뒤에서부터 자른다."""
     total_duration = _probe_audio_duration(audio_path)
     print(f"[TADAC] 스트리밍 청크 오디오 길이: {total_duration:.1f}초 ({total_duration/60:.1f}분)")
 
     if total_duration <= chunk_sec:
-        return [(audio_path, 0.0)]
+        return total_duration, [(0.0, total_duration)]
 
     ranges = _build_backward_chunk_ranges(total_duration, chunk_sec)
-    chunks = []
     for idx, (offset, end) in enumerate(ranges):
-        chunk_path = os.path.join(tmp_dir, f"stream_chunk_{idx:03d}.mp3")
-        duration = end - offset
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", audio_path,
-             "-ss", str(offset), "-t", str(duration),
-             "-acodec", "mp3", "-loglevel", "quiet", chunk_path],
-            check=True,
-        )
-        chunks.append((chunk_path, offset))
-        print(f"[TADAC] streaming chunk {idx}: {offset:.0f}초~{end:.0f}초")
+        print(f"[TADAC] streaming chunk range {idx}: {offset:.0f}초~{end:.0f}초")
+    return total_duration, ranges
 
-    print(f"[TADAC] 스트리밍 청크 분할 완료: {len(chunks)}개")
-    return chunks
+
+def _materialize_streaming_chunk(audio_path, tmp_dir, chunk_idx, offset, end):
+    """현재 처리할 청크만 파일로 자른다. 첫 재생 전 전체 청크 생성을 피하기 위함."""
+    if offset <= 0.0 and end >= _probe_audio_duration(audio_path) - 0.01:
+        return audio_path
+
+    chunk_path = os.path.join(tmp_dir, f"stream_chunk_{chunk_idx:03d}.mp3")
+    duration = end - offset
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", audio_path,
+         "-ss", str(offset), "-t", str(duration),
+         "-acodec", "mp3", "-loglevel", "quiet", chunk_path],
+        check=True,
+    )
+    print(f"[TADAC] streaming chunk {chunk_idx} 파일 생성: {offset:.0f}초~{end:.0f}초")
+    return chunk_path
 
 
 def _transcribe_auto_parallel(audio_path, language, stt_prompt, content_title, tmp_dirs, request_id=None):
@@ -500,6 +505,41 @@ def _compose_ai_summary(topic_summary, chapter_summaries):
     return "\n\n".join(parts)
 
 
+def _generate_and_build_shorts(chapter_payloads, topic_summary=""):
+    """챕터별 최종 자막 텍스트를 기반으로 숏폼 데이터를 만들고 영상을 렌더링한다."""
+    shorts_data = []
+    for payload in chapter_payloads:
+        ch_idx = payload.get("chapter_index", len(shorts_data))
+        ch_title = payload.get("chapter_title", f"Chapter {ch_idx + 1}")
+        chapter_text = payload.get("chapter_text", "")
+
+        print(f"[TADAC] 숏폼 생성 {ch_idx + 1}/{len(chapter_payloads)}: '{ch_title}'")
+        result = shorts_generator.generate_shorts_prompt(
+            chapter_title=ch_title,
+            chapter_text=chapter_text,
+            topic_summary=topic_summary,
+        )
+        if result:
+            result["chapter_index"] = ch_idx
+            result["chapter_title"] = ch_title
+        shorts_data.append(result)
+
+    shorts_output = [s for s in shorts_data if s is not None]
+    print(f"[TADAC] 숏폼 생성 완료: {len(shorts_output)}/{len(chapter_payloads)}개 챕터")
+
+    if shorts_output:
+        print("[TADAC] 숏폼 영상 자동 빌드 시작")
+        shorts_video_dir = os.path.join(str(Path(__file__).parent), "shorts_rendered")
+        shorts_video_paths = shorts_builder.build_all_shorts_videos(
+            shorts_output, output_dir=shorts_video_dir,
+        )
+        for ch_data, vpath in zip(shorts_output, shorts_video_paths):
+            if vpath:
+                ch_data["video_path"] = vpath
+
+    return shorts_output
+
+
 def _normalize_quiz(q):
     """GPT가 explanation 대신 correct_feedback/incorrect_feedback으로 반환할 때 통일"""
     cf = q.pop("correct_feedback", None)
@@ -513,13 +553,9 @@ def _format_time_range(start_sec, end_sec):
     return f"{start_sec / 60:.1f}분~{end_sec / 60:.1f}분"
 
 
-def _build_chunk_chapters(audio_chunks, total_duration):
+def _build_chunk_chapters(chunk_ranges):
     chapters = []
-    for idx, (_, offset_sec) in enumerate(audio_chunks):
-        if idx + 1 < len(audio_chunks):
-            end_sec = audio_chunks[idx + 1][1]
-        else:
-            end_sec = total_duration
+    for idx, (offset_sec, end_sec) in enumerate(chunk_ranges):
         chapters.append({
             "title":     f"Part {idx + 1} ({_format_time_range(offset_sec, end_sec)})",
             "start_sec": round(offset_sec, 3),
@@ -554,6 +590,7 @@ def _run_pipeline_sequential_chunk_streaming(
     lead_time,
     stt_prompt,
     refine,
+    generate_shorts,
     content_title,
     tmp_dirs,
     request_id=None,
@@ -561,11 +598,10 @@ def _run_pipeline_sequential_chunk_streaming(
     """CUDA 병렬 없이 10분 청크를 앞에서부터 STT/교정하여 먼저 흘려보내는 파이프라인."""
     _t_pipeline_start = _time.time()
 
-    total_duration = _probe_audio_duration(audio_path)
     chunk_tmp_dir = tempfile.mkdtemp(prefix="tadac_seq_chunks_")
     tmp_dirs.append(chunk_tmp_dir)
-    audio_chunks = _split_audio_into_chunks_for_streaming(audio_path, chunk_tmp_dir)
-    chunk_chapters = _build_chunk_chapters(audio_chunks, total_duration)
+    total_duration, chunk_ranges = _build_streaming_chunk_ranges(audio_path)
+    chunk_chapters = _build_chunk_chapters(chunk_ranges)
 
     yield {
         "type":           "init",
@@ -578,13 +614,17 @@ def _run_pipeline_sequential_chunk_streaming(
     all_segments = []
     all_words = []
     total_enriched_segments = []
+    shorts_chapter_payloads = []
     global_seg_id = 0
     log_prefix = f"[TADAC][{request_id}]" if request_id else "[TADAC]"
 
-    for chunk_idx, (chunk_path, offset_sec) in enumerate(audio_chunks):
+    for chunk_idx, (offset_sec, end_sec) in enumerate(chunk_ranges):
         chunk_meta = chunk_chapters[chunk_idx]
         _t_chunk_start = _time.time()
-        print(f"{log_prefix} 순차 청크 {chunk_idx + 1}/{len(audio_chunks)} STT 시작: {chunk_meta['title']}")
+        print(f"{log_prefix} 순차 청크 {chunk_idx + 1}/{len(chunk_ranges)} STT 시작: {chunk_meta['title']}")
+        chunk_path = _materialize_streaming_chunk(
+            audio_path, chunk_tmp_dir, chunk_idx, offset_sec, end_sec
+        )
 
         result = stt_module.transcribe(
             chunk_path,
@@ -635,6 +675,12 @@ def _run_pipeline_sequential_chunk_streaming(
             lead_time=lead_time,
         )
         ch_corrected = _build_corrected_subtitle_data(ch_enriched)
+        if generate_shorts:
+            shorts_chapter_payloads.append({
+                "chapter_index": chunk_idx,
+                "chapter_title": chunk_meta["title"],
+                "chapter_text":  " ".join(seg.get("text", "") for seg in ch_enriched),
+            })
 
         print(f"{log_prefix} 순차 청크 {chunk_idx + 1} 완료: {_time.time() - _t_chunk_start:.1f}초")
         yield {
@@ -739,6 +785,13 @@ def _run_pipeline_sequential_chunk_streaming(
             "streaming_mode":    "sequential_chunk",
         },
     }
+    if generate_shorts:
+        print(f"{log_prefix} 게임 데이터 스트리밍 완료 → 숏폼 생성 시작")
+        shorts_output = _generate_and_build_shorts(shorts_chapter_payloads, topic_summary=topic_summary)
+        yield {
+            "type":   "shorts_ready",
+            "shorts": shorts_output,
+        }
 
 
 def _branch_output_paths(output_path):
@@ -972,14 +1025,6 @@ def run_pipeline(
                 all_enriched_segments.extend(ch_enriched)
                 enriched_by_chapter.append(ch_enriched)
 
-        # ── Step 4.5: 숏폼 대본 + 영상 프롬프트 생성 ─────────────────────────
-        shorts_data = []
-        if generate_shorts:
-            print("[TADAC] 숏폼 프롬프트 생성 시작")
-            shorts_data = shorts_generator.generate_shorts_for_chapters(
-                chapters, enriched_by_chapter, topic_summary=topic_summary,
-            )
-
         # ── Step 5-A: 교정 자막 브랜치 생성 ───────────────────────────────────
         corrected_subtitle_data = _build_corrected_subtitle_data(all_enriched_segments)
 
@@ -1035,24 +1080,25 @@ def run_pipeline(
             "name_corrections": game_data["debug"]["name_corrections"],
         }
 
-        shorts_output = [s for s in shorts_data if s is not None] if shorts_data else []
+        shorts_payloads = []
+        for ch_idx, (chapter, ch_enriched) in enumerate(zip(chapters, enriched_by_chapter)):
+            shorts_payloads.append({
+                "chapter_index": ch_idx,
+                "chapter_title": chapter["title"],
+                "chapter_text":  " ".join(seg.get("text", "") for seg in ch_enriched),
+            })
 
-        # 숏폼 영상 자동 빌드 (shorts=true일 때 shorts_builder까지 자동 실행)
-        shorts_video_paths = []
-        if shorts_output:
-            print("[TADAC] 숏폼 영상 자동 빌드 시작")
-            shorts_video_dir = os.path.join(str(Path(__file__).parent), "shorts_rendered")
-            shorts_video_paths = shorts_builder.build_all_shorts_videos(
-                shorts_output, output_dir=shorts_video_dir,
-            )
-            for i, (ch_data, vpath) in enumerate(zip(shorts_output, shorts_video_paths)):
-                if vpath:
-                    ch_data["video_path"] = vpath
+        # ── Step 6: 게임 데이터 브랜치 완성 후 숏폼 생성 ─────────────────────
+        shorts_output = []
+        if generate_shorts:
+            print("[TADAC] 게임 데이터 생성 완료 → 숏폼 생성 시작")
+            shorts_output = _generate_and_build_shorts(shorts_payloads, topic_summary=topic_summary)
 
         if return_branches:
             result = {
                 "corrected_subtitles": corrected_subtitle_data,
                 "blank_game_data":     game_data,
+                "shorts_payloads":     shorts_payloads,
             }
             if shorts_output:
                 result["shorts"] = shorts_output
@@ -1208,6 +1254,7 @@ def run_pipeline_streaming(
         all_quizzes = []
         total_enriched_segments = []
         chapter_summaries = []  # [(chapter_title, chapter_summary), ...] — complete에서 합성
+        shorts_chapter_payloads = []
 
         for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
             if not ch_segs:
@@ -1269,28 +1316,12 @@ def run_pipeline_streaming(
 
             total_enriched_segments.extend(ch_enriched)
             all_quizzes.extend(ch_quizzes)
-
-            # 숏폼 대본 생성 + 영상 빌드 (챕터 처리 완료 후)
-            ch_shorts = None
             if generate_shorts:
-                chapter_text = " ".join(seg.get("text", "") for seg in ch_enriched)
-                print(f"[TADAC] [스트리밍] 숏폼 생성: '{chapter['title']}'")
-                ch_shorts = shorts_generator.generate_shorts_prompt(
-                    chapter_title=chapter["title"],
-                    chapter_text=chapter_text,
-                    topic_summary=topic_summary,
-                )
-                if ch_shorts:
-                    ch_shorts["chapter_index"] = ch_idx
-                    ch_shorts["chapter_title"] = chapter["title"]
-                    # 영상 자동 빌드
-                    shorts_video_dir = os.path.join(str(Path(__file__).parent), "shorts_rendered")
-                    try:
-                        video_path = shorts_builder.build_chapter_videos(ch_shorts, output_dir=shorts_video_dir)
-                        if video_path:
-                            ch_shorts["video_path"] = video_path
-                    except Exception as e:
-                        print(f"[TADAC] [스트리밍] 챕터 {ch_idx} 영상 빌드 실패: {e}")
+                shorts_chapter_payloads.append({
+                    "chapter_index": ch_idx,
+                    "chapter_title": chapter["title"],
+                    "chapter_text":  " ".join(seg.get("text", "") for seg in ch_enriched),
+                })
 
             # 게임 데이터 생성 (챕터 분)
             ch_game_data = blank_subtitle.build_game_data(
@@ -1311,8 +1342,6 @@ def run_pipeline_streaming(
                 "fall_events":         ch_game_data.get("fall_events", []),
                 "quizzes":             ch_quizzes,
             }
-            if ch_shorts:
-                event["shorts"] = ch_shorts
 
             print(f"[TADAC] ⏱ 챕터 {ch_idx+1} 완료: {_time.time() - _t_ch_start:.1f}초")
             yield event
@@ -1332,6 +1361,13 @@ def run_pipeline_streaming(
                 "total_segments":    len(total_enriched_segments),
             },
         }
+        if generate_shorts:
+            print("[TADAC] 게임 데이터 스트리밍 완료 → 숏폼 생성 시작")
+            shorts_output = _generate_and_build_shorts(shorts_chapter_payloads, topic_summary=topic_summary)
+            yield {
+                "type":   "shorts_ready",
+                "shorts": shorts_output,
+            }
 
     finally:
         for d in tmp_dirs:
@@ -1437,6 +1473,7 @@ def run_pipeline_chunked_streaming(
                 lead_time            = lead_time,
                 stt_prompt           = stt_prompt,
                 refine               = refine,
+                generate_shorts      = generate_shorts,
                 content_title        = content_title,
                 tmp_dirs             = tmp_dirs,
                 request_id           = request_id,
@@ -1521,6 +1558,7 @@ def run_pipeline_chunked_streaming(
         all_quizzes = []
         total_enriched_segments = []
         chapter_summaries = []
+        shorts_chapter_payloads = []
 
         for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
             if not ch_segs:
@@ -1580,6 +1618,12 @@ def run_pipeline_chunked_streaming(
 
             total_enriched_segments.extend(ch_enriched)
             all_quizzes.extend(ch_quizzes)
+            if generate_shorts:
+                shorts_chapter_payloads.append({
+                    "chapter_index": ch_idx,
+                    "chapter_title": chapter["title"],
+                    "chapter_text":  " ".join(seg.get("text", "") for seg in ch_enriched),
+                })
 
             # 게임 데이터 생성
             ch_game_data = blank_subtitle.build_game_data(
@@ -1618,6 +1662,13 @@ def run_pipeline_chunked_streaming(
                 "total_segments":    len(total_enriched_segments),
             },
         }
+        if generate_shorts:
+            print("[TADAC] 게임 데이터 스트리밍 완료 → 숏폼 생성 시작")
+            shorts_output = _generate_and_build_shorts(shorts_chapter_payloads, topic_summary=topic_summary)
+            yield {
+                "type":   "shorts_ready",
+                "shorts": shorts_output,
+            }
 
     finally:
         for d in tmp_dirs:
@@ -1666,26 +1717,39 @@ def main():
                 "blanks_per_sentence": MAX_BLANKS_PER_SENTENCE,
             },
         }
+        aggregated_shorts = []
+        stream_shorts_payloads = []
+        stream_topic_summary = ""
 
         for event in run_pipeline_chunked_streaming(
             source          = args.source,
             language        = args.lang,
             stt_prompt      = args.prompt,
             refine          = not args.no_refine,
-            generate_shorts = args.shorts,
+            generate_shorts = False,
         ):
             print(f"\n[TADAC] === 이벤트: {event['type']} ===")
             print(json.dumps(event, ensure_ascii=False, indent=2)[:500])
 
-            if event["type"] == "chapter_ready":
-                aggregated_corrected_subtitle_data["subtitles"].extend(event.get("corrected_subtitles", []))
+            if event["type"] == "init":
+                stream_topic_summary = event.get("topic_summary", stream_topic_summary)
+            elif event["type"] == "chapter_ready":
+                corrected_subtitles = event.get("corrected_subtitles", [])
+                aggregated_corrected_subtitle_data["subtitles"].extend(corrected_subtitles)
                 aggregated_blank_game_data["subtitles"].extend(event.get("subtitles", []))
                 aggregated_blank_game_data["fall_events"].extend(event.get("fall_events", []))
                 aggregated_blank_game_data["quizzes"].extend(event.get("quizzes", []))
+                if args.shorts:
+                    stream_shorts_payloads.append({
+                        "chapter_index": event.get("chapter_index", len(stream_shorts_payloads)),
+                        "chapter_title": event.get("chapter_title", f"Chapter {len(stream_shorts_payloads) + 1}"),
+                        "chapter_text":  " ".join(sub.get("text", "") for sub in corrected_subtitles),
+                    })
             elif event["type"] == "analysis_ready":
                 aggregated_blank_game_data["chapters"] = event.get("chapters", [])
                 aggregated_blank_game_data["quizzes"] = event.get("quizzes", [])
                 aggregated_blank_game_data["ai_summary"] = event.get("ai_summary", "")
+                stream_topic_summary = event.get("topic_summary", stream_topic_summary)
             elif event["type"] == "complete":
                 aggregated_corrected_subtitle_data["stats"] = event.get("stats", {})
                 aggregated_blank_game_data["stats"] = event.get("stats", {})
@@ -1694,6 +1758,8 @@ def main():
                     aggregated_blank_game_data["chapters"] = event.get("chapters", [])
                 if event.get("quizzes"):
                     aggregated_blank_game_data["quizzes"] = event.get("quizzes", [])
+            elif event["type"] == "shorts_ready":
+                aggregated_shorts = event.get("shorts", [])
 
         print("[TADAC] 스트리밍 완료")
 
@@ -1718,6 +1784,19 @@ def main():
         )
         print(f"[TADAC] 교정 자막 저장: {output_paths['corrected_subtitles'].resolve()}")
         print(f"[TADAC] 빈칸 게임 데이터 저장: {output_paths['blank_game_data'].resolve()}")
+        if args.shorts and not aggregated_shorts:
+            print("[TADAC] 게임 데이터 파일 저장 완료 → 숏폼 생성 시작")
+            aggregated_shorts = _generate_and_build_shorts(
+                stream_shorts_payloads,
+                topic_summary=stream_topic_summary,
+            )
+        if aggregated_shorts:
+            shorts_path = Path(__file__).parent / "shorts_output.json"
+            shorts_path.write_text(
+                json.dumps(aggregated_shorts, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[TADAC] 숏폼 데이터 저장 완료: {shorts_path.resolve()}")
 
     else:
         # 일괄 모드
@@ -1727,7 +1806,7 @@ def main():
             stt_prompt      = args.prompt,
             refine          = not args.no_refine,
             return_branches = True,
-            generate_shorts = args.shorts,
+            generate_shorts = False,
         )
         corrected_subtitle_data = branch_data["corrected_subtitles"]
         game_data = branch_data["blank_game_data"]
@@ -1744,6 +1823,13 @@ def main():
 
         print(f"[TADAC] 교정 자막 저장 완료: {output_paths['corrected_subtitles'].resolve()}")
         print(f"[TADAC] 빈칸 게임 데이터 저장 완료: {output_paths['blank_game_data'].resolve()}")
+
+        if args.shorts:
+            print("[TADAC] 게임 데이터 파일 저장 완료 → 숏폼 생성 시작")
+            branch_data["shorts"] = _generate_and_build_shorts(
+                branch_data.get("shorts_payloads", []),
+                topic_summary=game_data.get("ai_summary", ""),
+            )
 
         if branch_data.get("shorts"):
             shorts_path = Path(__file__).parent / "shorts_output.json"

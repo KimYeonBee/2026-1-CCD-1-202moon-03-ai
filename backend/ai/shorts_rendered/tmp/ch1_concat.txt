@@ -1,4 +1,4 @@
-file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s1_raw.mp4'
-file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s2_raw.mp4'
-file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s3_raw.mp4'
-file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s4_raw.mp4'
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s1_merged.mp4'
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s2_merged.mp4'
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s3_merged.mp4'
+file '/Users/yeonbee/main/documents/Workspace/TADAC/backend/ai/shorts_rendered/tmp/ch1_s4_merged.mp4'
