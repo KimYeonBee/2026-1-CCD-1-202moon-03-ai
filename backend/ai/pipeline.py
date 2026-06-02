@@ -548,6 +548,30 @@ def _normalize_quiz(q):
     return q
 
 
+def _assign_output_segment_ids(enriched_segments, next_segment_id):
+    """최종 출력/DB 저장용 segment_id를 전체 영상 기준으로 유일하게 부여한다.
+
+    GPT 교정과 키워드 매칭은 원본 STT id를 참조하므로 id는 건드리지 않는다.
+    재분할된 조각도 각각 별도 segment_id를 받아야 백엔드 저장 시 앞 챕터를 덮지 않는다.
+    """
+    for seg in enriched_segments:
+        seg.setdefault("source_segment_id", seg.get("segment_id", seg.get("id")))
+        seg["segment_id"] = next_segment_id
+        next_segment_id += 1
+    return next_segment_id
+
+
+def _apply_output_segment_range(quizzes, enriched_segments):
+    if not quizzes or not enriched_segments:
+        return
+    segment_ids = [seg.get("segment_id") for seg in enriched_segments if seg.get("segment_id") is not None]
+    if not segment_ids:
+        return
+    segment_range = [segment_ids[0], segment_ids[-1]]
+    for quiz in quizzes:
+        quiz["segment_range"] = segment_range
+
+
 def _format_time_range(start_sec, end_sec):
     return f"{start_sec / 60:.1f}분~{end_sec / 60:.1f}분"
 
@@ -615,6 +639,7 @@ def _run_pipeline_sequential_chunk_streaming(
     total_enriched_segments = []
     shorts_chapter_payloads = []
     global_seg_id = 0
+    next_output_segment_id = 0
     log_prefix = f"[TADAC][{request_id}]" if request_id else "[TADAC]"
 
     for chunk_idx, (offset_sec, end_sec) in enumerate(chunk_ranges):
@@ -667,6 +692,10 @@ def _run_pipeline_sequential_chunk_streaming(
             )
             ch_summary = ""
 
+        next_output_segment_id = _assign_output_segment_ids(
+            ch_enriched,
+            next_output_segment_id,
+        )
         total_enriched_segments.extend(ch_enriched)
         ch_game_data = blank_subtitle.build_game_data(
             ch_enriched,
@@ -955,6 +984,7 @@ def run_pipeline(
         enriched_by_chapter = []  # 숏폼 생성용 챕터별 교정 세그먼트
         all_quizzes = []
         chapter_summaries = []  # [(chapter_title, chapter_summary), ...] — ai_summary 합성용
+        next_output_segment_id = 0
 
         for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
             if not ch_segs:
@@ -991,6 +1021,11 @@ def run_pipeline(
                     q["trigger_time"] = round(trigger_time, 3)
                     q["segment_range"] = [seg_id_start, seg_id_end]
 
+                next_output_segment_id = _assign_output_segment_ids(
+                    ch_enriched,
+                    next_output_segment_id,
+                )
+                _apply_output_segment_range(ch_quizzes, ch_enriched)
                 all_quizzes.extend(ch_quizzes)
                 all_enriched_segments.extend(ch_enriched)
                 enriched_by_chapter.append(ch_enriched)
@@ -1020,6 +1055,11 @@ def run_pipeline(
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
 
+                next_output_segment_id = _assign_output_segment_ids(
+                    ch_enriched,
+                    next_output_segment_id,
+                )
+                _apply_output_segment_range(ch_quizzes, ch_enriched)
                 all_quizzes.extend(ch_quizzes)
                 all_enriched_segments.extend(ch_enriched)
                 enriched_by_chapter.append(ch_enriched)
@@ -1254,6 +1294,7 @@ def run_pipeline_streaming(
         total_enriched_segments = []
         chapter_summaries = []  # [(chapter_title, chapter_summary), ...] — complete에서 합성
         shorts_chapter_payloads = []
+        next_output_segment_id = 0
 
         for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
             if not ch_segs:
@@ -1313,6 +1354,11 @@ def run_pipeline_streaming(
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
 
+            next_output_segment_id = _assign_output_segment_ids(
+                ch_enriched,
+                next_output_segment_id,
+            )
+            _apply_output_segment_range(ch_quizzes, ch_enriched)
             total_enriched_segments.extend(ch_enriched)
             all_quizzes.extend(ch_quizzes)
             if generate_shorts:
@@ -1558,6 +1604,7 @@ def run_pipeline_chunked_streaming(
         total_enriched_segments = []
         chapter_summaries = []
         shorts_chapter_payloads = []
+        next_output_segment_id = 0
 
         for ch_idx, (chapter, ch_segs) in enumerate(zip(chapters, chapter_segments_map)):
             if not ch_segs:
@@ -1615,6 +1662,11 @@ def run_pipeline_chunked_streaming(
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
 
+            next_output_segment_id = _assign_output_segment_ids(
+                ch_enriched,
+                next_output_segment_id,
+            )
+            _apply_output_segment_range(ch_quizzes, ch_enriched)
             total_enriched_segments.extend(ch_enriched)
             all_quizzes.extend(ch_quizzes)
             if generate_shorts:
