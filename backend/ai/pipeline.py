@@ -549,16 +549,11 @@ def _normalize_quiz(q):
 
 
 def _assign_output_segment_ids(enriched_segments, next_segment_id):
-    """최종 출력/DB 저장용 segment_id를 전체 영상 기준으로 유일하게 부여한다.
-
-    GPT 교정과 키워드 매칭은 원본 STT id를 참조하므로 id는 건드리지 않는다.
-    재분할된 조각도 각각 별도 segment_id를 받아야 백엔드 저장 시 앞 챕터를 덮지 않는다.
-    """
-    for seg in enriched_segments:
+    for local_index, seg in enumerate(enriched_segments):
         seg.setdefault("source_segment_id", seg.get("segment_id", seg.get("id")))
-        seg["segment_id"] = next_segment_id
-        next_segment_id += 1
-    return next_segment_id
+        start_ms = int(round(float(seg.get("start", 0.0) or 0.0) * 1000))
+        seg["segment_id"] = start_ms * 10 + local_index
+    return next_segment_id + len(enriched_segments)
 
 
 def _apply_output_segment_range(quizzes, enriched_segments):
