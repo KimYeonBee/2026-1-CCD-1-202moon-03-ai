@@ -439,19 +439,18 @@ def _apply_gpt_results(ch_segs, combined_result, all_words, name_corrections=Non
         if cur:
             parts.append(cur)
         w_off = 0
+        original_seg_id = seg.get("id", seg.get("segment_id", 0))
         for pw in parts:
             pt = " ".join(pw)
             n = len(pw)
             ps = seg.get("start", 0.0) + duration * (w_off / total_w)
             pe = seg.get("start", 0.0) + duration * ((w_off + n) / total_w)
             resplit.append({
-                "id": 0, "start": round(ps, 3), "end": round(pe, 3), "text": pt,
+                "id": original_seg_id, "start": round(ps, 3), "end": round(pe, 3), "text": pt,
             })
             w_off += n
     if len(resplit) != len(ch_segs):
         print(f"[TADAC]   교정 후 재분할: {len(ch_segs)}개 → {len(resplit)}개 (max {MAX_SEGMENT_CHARS}자)")
-        for i, seg in enumerate(resplit):
-            seg["id"] = i
         ch_segs.clear()
         ch_segs.extend(resplit)
 
