@@ -549,11 +549,16 @@ def _normalize_quiz(q):
 
 
 def _assign_output_segment_ids(enriched_segments, next_segment_id):
-    for local_index, seg in enumerate(enriched_segments):
+    """최종 출력/DB 저장용 segment_id를 전체 영상 기준으로 유일하게 부여한다.
+
+    GPT 교정과 키워드 매칭은 원본 STT id를 참조하므로 id는 건드리지 않는다.
+    재분할된 조각도 각각 별도 segment_id를 받아야 백엔드 저장 시 앞 챕터를 덮지 않는다.
+    """
+    for seg in enriched_segments:
         seg.setdefault("source_segment_id", seg.get("segment_id", seg.get("id")))
-        start_ms = int(round(float(seg.get("start", 0.0) or 0.0) * 1000))
-        seg["segment_id"] = start_ms * 10 + local_index
-    return next_segment_id + len(enriched_segments)
+        seg["segment_id"] = next_segment_id
+        next_segment_id += 1
+    return next_segment_id
 
 
 def _apply_output_segment_range(quizzes, enriched_segments):
@@ -565,6 +570,54 @@ def _apply_output_segment_range(quizzes, enriched_segments):
     segment_range = [segment_ids[0], segment_ids[-1]]
     for quiz in quizzes:
         quiz["segment_range"] = segment_range
+
+
+def _retie_subtitles_and_fall_events(game_data):
+    """최종 송출 직전 subtitles/blanks 기준으로 fall_events를 다시 묶는다.
+
+    백엔드가 segment_id만 기준으로 저장/삭제하므로, 영상별 특이 케이스에서
+    fall_event가 다른 subtitle의 blank와 엮이면 프론트에서 키워드가 떨어지지 않는다.
+    이 단계에서 subtitle id를 start time 기반으로 다시 보강하고, blanks에서 fall_events를
+    재생성해 두 목록이 반드시 같은 segment_id/keyword 좌표계를 쓰게 만든다.
+    """
+    subtitles = game_data.get("subtitles", [])
+    if not subtitles:
+        return game_data
+
+    used_ids = set()
+    fall_events = []
+
+    for local_index, subtitle in enumerate(subtitles):
+        start = float(subtitle.get("start", subtitle.get("start_sec", 0.0)) or 0.0)
+        end = float(subtitle.get("end", subtitle.get("end_sec", start)) or start)
+        base_id = int(round(start * 1000)) * 100 + local_index
+        segment_id = base_id
+        while segment_id in used_ids:
+            segment_id += 1
+        used_ids.add(segment_id)
+        subtitle["segment_id"] = segment_id
+
+        blanks = sorted(subtitle.get("blanks", []), key=lambda blank: blank.get("position", 0))
+        blank_count = len(blanks)
+        duration = max(end - start, 0.0)
+        for blank_index, blank in enumerate(blanks):
+            keyword = str(blank.get("keyword", "") or "")
+            if not keyword:
+                continue
+            if blank_count <= 0 or duration == 0:
+                target_time = round(start, 3)
+            else:
+                target_time = round(start + duration * ((blank_index + 1) / (blank_count + 1)), 3)
+            fall_events.append({
+                "keyword": keyword,
+                "target_time": target_time,
+                "fall_window": max(round(target_time - start, 3), 0.5),
+                "segment_id": segment_id,
+            })
+
+    fall_events.sort(key=lambda event: event["target_time"])
+    game_data["fall_events"] = fall_events
+    return game_data
 
 
 def _format_time_range(start_sec, end_sec):
@@ -697,6 +750,7 @@ def _run_pipeline_sequential_chunk_streaming(
             fall_speed=fall_speed,
             lead_time=lead_time,
         )
+        ch_game_data = _retie_subtitles_and_fall_events(ch_game_data)
         ch_corrected = _build_corrected_subtitle_data(ch_enriched)
         if generate_shorts:
             shorts_chapter_payloads.append({
@@ -1068,6 +1122,7 @@ def run_pipeline(
             fall_speed=fall_speed,
             lead_time=lead_time,
         )
+        game_data = _retie_subtitles_and_fall_events(game_data)
         game_data["quizzes"] = all_quizzes
 
         # 디버깅용 — 풀(key_terms)과 매칭 통계를 함께 저장
@@ -1369,6 +1424,7 @@ def run_pipeline_streaming(
                 fall_speed=fall_speed,
                 lead_time=lead_time,
             )
+            ch_game_data = _retie_subtitles_and_fall_events(ch_game_data)
             ch_corrected_subtitle_data = _build_corrected_subtitle_data(ch_enriched)
 
             # ── chapter_ready 이벤트 ──────────────────────────────────────────
@@ -1675,6 +1731,7 @@ def run_pipeline_chunked_streaming(
             ch_game_data = blank_subtitle.build_game_data(
                 ch_enriched, fall_speed=fall_speed, lead_time=lead_time,
             )
+            ch_game_data = _retie_subtitles_and_fall_events(ch_game_data)
             ch_corrected = _build_corrected_subtitle_data(ch_enriched)
 
             # chapter_ready 이벤트 (자막 + 퀴즈 포함)
