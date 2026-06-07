@@ -15,6 +15,7 @@ TADAC FastAPI 서버 — AI 파이프라인 HTTP 엔드포인트
 AI는 항상 세그먼트당 최대 빈칸 2개로 생성, 프론트가 몇 개 보여줄지 결정.
 """
 
+import asyncio
 import os
 import shutil
 import sys
@@ -46,6 +47,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 동시 파이프라인 실행 제한 (GPU 3개, 여유 있지만 OpenAI rate limit 고려)
+_pipeline_semaphore = asyncio.Semaphore(3)
 
 # 업로드 허용 확장자 — 백엔드 API는 일단 영상 파일만 받음
 ALLOWED_EXTENSIONS = {".mp4", ".webm"}
@@ -117,16 +121,18 @@ async def process_file(req: UrlRequest):
     try:
         source = _download_url_to_file(req.url, tmp_dir)
 
-        game_data = pipeline_module.run_pipeline(
-            source              = source,
-            language            = req.language,
-            blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
-            fall_speed          = BASE_FALL_SPEED,
-            lead_time           = BASE_LEAD_TIME,
-            stt_prompt          = req.stt_prompt,
-            refine              = req.refine,
-            generate_shorts     = req.shorts,
-        )
+        async with _pipeline_semaphore:
+            game_data = await asyncio.to_thread(
+                pipeline_module.run_pipeline,
+                source              = source,
+                language            = req.language,
+                blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+                fall_speed          = BASE_FALL_SPEED,
+                lead_time           = BASE_LEAD_TIME,
+                stt_prompt          = req.stt_prompt,
+                refine              = req.refine,
+                generate_shorts     = req.shorts,
+            )
         return game_data
 
     except httpx.HTTPStatusError as e:
@@ -160,16 +166,18 @@ async def process_url(req: UrlRequest):
             tmp_dir = tempfile.mkdtemp(prefix="tadac_url_download_")
             source = _download_url_to_file(req.url, tmp_dir)
 
-        game_data = pipeline_module.run_pipeline(
-            source              = source,
-            language            = req.language,
-            blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
-            fall_speed          = BASE_FALL_SPEED,
-            lead_time           = BASE_LEAD_TIME,
-            stt_prompt          = req.stt_prompt,
-            refine              = req.refine,
-            generate_shorts     = req.shorts,
-        )
+        async with _pipeline_semaphore:
+            game_data = await asyncio.to_thread(
+                pipeline_module.run_pipeline,
+                source              = source,
+                language            = req.language,
+                blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+                fall_speed          = BASE_FALL_SPEED,
+                lead_time           = BASE_LEAD_TIME,
+                stt_prompt          = req.stt_prompt,
+                refine              = req.refine,
+                generate_shorts     = req.shorts,
+            )
         return game_data
 
     except httpx.HTTPStatusError as e:
@@ -227,28 +235,31 @@ async def process_url_stream(req: UrlRequest):
             shutil.rmtree(tmp_dir, ignore_errors=True)
             raise HTTPException(status_code=500, detail=f"URL 다운로드 중 오류: {e}")
 
-    def event_generator():
-        try:
-            for chunk in pipeline_module.run_pipeline_chunked_streaming(
-                source              = source,
-                language            = req.language,
-                blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
-                fall_speed          = BASE_FALL_SPEED,
-                lead_time           = BASE_LEAD_TIME,
-                stt_prompt          = req.stt_prompt,
-                refine              = req.refine,
-                generate_shorts     = req.shorts,
-                request_id          = request_id,
-            ):
-                chunk.setdefault("request_id", request_id)
-                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            print(f"[TADAC] API /process-url/stream[{request_id}] error: {e}")
-            error_event = {"type": "error", "message": str(e), "request_id": request_id}
-            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
-        finally:
-            if tmp_dir:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
+    async def event_generator():
+        async with _pipeline_semaphore:
+            try:
+                for chunk in await asyncio.to_thread(
+                    lambda: list(pipeline_module.run_pipeline_chunked_streaming(
+                        source              = source,
+                        language            = req.language,
+                        blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+                        fall_speed          = BASE_FALL_SPEED,
+                        lead_time           = BASE_LEAD_TIME,
+                        stt_prompt          = req.stt_prompt,
+                        refine              = req.refine,
+                        generate_shorts     = req.shorts,
+                        request_id          = request_id,
+                    ))
+                ):
+                    chunk.setdefault("request_id", request_id)
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                print(f"[TADAC] API /process-url/stream[{request_id}] error: {e}")
+                error_event = {"type": "error", "message": str(e), "request_id": request_id}
+                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+            finally:
+                if tmp_dir:
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return StreamingResponse(
         event_generator(),
@@ -292,27 +303,30 @@ async def process_file_stream(req: UrlRequest):
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"URL 다운로드 중 오류: {e}")
 
-    def event_generator():
-        try:
-            for chunk in pipeline_module.run_pipeline_chunked_streaming(
-                source              = source,
-                language            = req.language,
-                blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
-                fall_speed          = BASE_FALL_SPEED,
-                lead_time           = BASE_LEAD_TIME,
-                stt_prompt          = req.stt_prompt,
-                refine              = req.refine,
-                generate_shorts     = req.shorts,
-                request_id          = request_id,
-            ):
-                chunk.setdefault("request_id", request_id)
-                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            print(f"[TADAC] API /process/stream[{request_id}] error: {e}")
-            error_event = {"type": "error", "message": str(e), "request_id": request_id}
-            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+    async def event_generator():
+        async with _pipeline_semaphore:
+            try:
+                for chunk in await asyncio.to_thread(
+                    lambda: list(pipeline_module.run_pipeline_chunked_streaming(
+                        source              = source,
+                        language            = req.language,
+                        blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+                        fall_speed          = BASE_FALL_SPEED,
+                        lead_time           = BASE_LEAD_TIME,
+                        stt_prompt          = req.stt_prompt,
+                        refine              = req.refine,
+                        generate_shorts     = req.shorts,
+                        request_id          = request_id,
+                    ))
+                ):
+                    chunk.setdefault("request_id", request_id)
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                print(f"[TADAC] API /process/stream[{request_id}] error: {e}")
+                error_event = {"type": "error", "message": str(e), "request_id": request_id}
+                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return StreamingResponse(
         event_generator(),
