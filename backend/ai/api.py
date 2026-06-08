@@ -49,7 +49,8 @@ app.add_middleware(
 )
 
 # 동시 파이프라인 실행 제한 (GPU 3개, 여유 있지만 OpenAI rate limit 고려)
-_pipeline_semaphore = asyncio.Semaphore(3)
+_pipeline_semaphore = asyncio.Semaphore(3)            # async 엔드포인트용
+_pipeline_semaphore_sync = __import__("threading").Semaphore(3)  # 스트리밍 generator용
 
 # 업로드 허용 확장자 — 백엔드 API는 일단 영상 파일만 받음
 ALLOWED_EXTENSIONS = {".mp4", ".webm"}
@@ -235,31 +236,30 @@ async def process_url_stream(req: UrlRequest):
             shutil.rmtree(tmp_dir, ignore_errors=True)
             raise HTTPException(status_code=500, detail=f"URL 다운로드 중 오류: {e}")
 
-    async def event_generator():
-        async with _pipeline_semaphore:
-            try:
-                for chunk in await asyncio.to_thread(
-                    lambda: list(pipeline_module.run_pipeline_chunked_streaming(
-                        source              = source,
-                        language            = req.language,
-                        blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
-                        fall_speed          = BASE_FALL_SPEED,
-                        lead_time           = BASE_LEAD_TIME,
-                        stt_prompt          = req.stt_prompt,
-                        refine              = req.refine,
-                        generate_shorts     = req.shorts,
-                        request_id          = request_id,
-                    ))
-                ):
-                    chunk.setdefault("request_id", request_id)
-                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-            except Exception as e:
-                print(f"[TADAC] API /process-url/stream[{request_id}] error: {e}")
-                error_event = {"type": "error", "message": str(e), "request_id": request_id}
-                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
-            finally:
-                if tmp_dir:
-                    shutil.rmtree(tmp_dir, ignore_errors=True)
+    def event_generator():
+        _pipeline_semaphore_sync.acquire()
+        try:
+            for chunk in pipeline_module.run_pipeline_chunked_streaming(
+                source              = source,
+                language            = req.language,
+                blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+                fall_speed          = BASE_FALL_SPEED,
+                lead_time           = BASE_LEAD_TIME,
+                stt_prompt          = req.stt_prompt,
+                refine              = req.refine,
+                generate_shorts     = req.shorts,
+                request_id          = request_id,
+            ):
+                chunk.setdefault("request_id", request_id)
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            print(f"[TADAC] API /process-url/stream[{request_id}] error: {e}")
+            error_event = {"type": "error", "message": str(e), "request_id": request_id}
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        finally:
+            _pipeline_semaphore_sync.release()
+            if tmp_dir:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return StreamingResponse(
         event_generator(),
@@ -303,30 +303,29 @@ async def process_file_stream(req: UrlRequest):
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"URL 다운로드 중 오류: {e}")
 
-    async def event_generator():
-        async with _pipeline_semaphore:
-            try:
-                for chunk in await asyncio.to_thread(
-                    lambda: list(pipeline_module.run_pipeline_chunked_streaming(
-                        source              = source,
-                        language            = req.language,
-                        blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
-                        fall_speed          = BASE_FALL_SPEED,
-                        lead_time           = BASE_LEAD_TIME,
-                        stt_prompt          = req.stt_prompt,
-                        refine              = req.refine,
-                        generate_shorts     = req.shorts,
-                        request_id          = request_id,
-                    ))
-                ):
-                    chunk.setdefault("request_id", request_id)
-                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-            except Exception as e:
-                print(f"[TADAC] API /process/stream[{request_id}] error: {e}")
-                error_event = {"type": "error", "message": str(e), "request_id": request_id}
-                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
-            finally:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
+    def event_generator():
+        _pipeline_semaphore_sync.acquire()
+        try:
+            for chunk in pipeline_module.run_pipeline_chunked_streaming(
+                source              = source,
+                language            = req.language,
+                blanks_per_sentence = MAX_BLANKS_PER_SENTENCE,
+                fall_speed          = BASE_FALL_SPEED,
+                lead_time           = BASE_LEAD_TIME,
+                stt_prompt          = req.stt_prompt,
+                refine              = req.refine,
+                generate_shorts     = req.shorts,
+                request_id          = request_id,
+            ):
+                chunk.setdefault("request_id", request_id)
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            print(f"[TADAC] API /process/stream[{request_id}] error: {e}")
+            error_event = {"type": "error", "message": str(e), "request_id": request_id}
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        finally:
+            _pipeline_semaphore_sync.release()
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return StreamingResponse(
         event_generator(),
