@@ -1738,21 +1738,44 @@ def run_pipeline_chunked_streaming(
                     chapter_summaries.append((chapter["title"], ch_summary))
 
             else:
-                # 수동 자막 경로
-                ch_transcript = {
-                    "text": " ".join(seg.get("text", "") for seg in ch_segs),
-                    "words": all_words,
-                    "segments": ch_segs,
-                    "language": language,
-                }
-                ch_enriched = keyword_extractor.extract_keywords(
-                    ch_transcript, blanks_per_sentence=blanks_per_sentence
+                # 수동 자막 / summary 없음 — 교정 불필요, 키워드+퀴즈+요약은 통합 처리로 획득
+                print(f"[TADAC] [chunked] 챕터 {ch_idx+1} else 분기 진입 (transcript_source={transcript_source}, refine={refine}, summary={bool(summary)})")
+                combined_result = combined_processor.process_chapter_unified(
+                    ch_segs, summary or "", chapter["title"],
+                    blanks_per_sentence=blanks_per_sentence,
+                    global_keywords=global_keywords if global_keywords else [],
                 )
-                ch_quizzes = quiz_generator.generate_quizzes(ch_segs, chapters=[chapter])
+
+                ch_enriched = keyword_extractor.extract_keywords(
+                    {
+                        "text": " ".join(seg.get("text", "") for seg in ch_segs),
+                        "words": all_words,
+                        "segments": ch_segs,
+                        "language": language,
+                    },
+                    blanks_per_sentence=blanks_per_sentence,
+                )
+
+                ch_quizzes = combined_result.get("quizzes", [])
+                if not ch_quizzes:
+                    ch_quizzes = quiz_generator.generate_quizzes(ch_segs, chapters=[chapter])
+                last_seg = ch_segs[-1] if ch_segs else {}
+                trigger_time = last_seg.get("end", 0.0)
+                seg_id_start = ch_segs[0].get("id", 0) if ch_segs else 0
+                seg_id_end = last_seg.get("id", 0)
+
                 for q in ch_quizzes:
                     _normalize_quiz(q)
                     q["ai_quiz_index"] = len(all_quizzes) + ch_quizzes.index(q)
                     q["chapter_index"] = ch_idx
+                    q["chapter_title"] = chapter.get("title", "")
+                    q["trigger_time"] = round(trigger_time, 3)
+                    q["segment_range"] = [seg_id_start, seg_id_end]
+
+                ch_summary = (combined_result.get("chapter_summary") or "").strip()
+                print(f"[TADAC] [chunked] 챕터 {ch_idx+1} chapter_summary 길이: {len(ch_summary)}자 | 내용: {ch_summary[:100]}...")
+                if ch_summary:
+                    chapter_summaries.append((chapter["title"], ch_summary))
 
             next_output_segment_id = _assign_output_segment_ids(
                 ch_enriched,
