@@ -1693,6 +1693,7 @@ def run_pipeline_chunked_streaming(
                     q["segment_range"] = [seg_id_start, seg_id_end]
 
                 ch_summary = (combined_result.get("chapter_summary") or "").strip()
+                print(f"[TADAC] [chunked] 챕터 {ch_idx+1} chapter_summary 길이: {len(ch_summary)}자 | 내용: {ch_summary[:100]}...")
                 if ch_summary:
                     chapter_summaries.append((chapter["title"], ch_summary))
 
@@ -1753,9 +1754,13 @@ def run_pipeline_chunked_streaming(
         _t_total = _time.time() - _t_pipeline_start
         print(f"[TADAC] ⏱ 전체 파이프라인 완료: {_t_total:.1f}초 (STT: {_t_stt_total:.1f}초, 후처리: {_t_total - _t_stt_total:.1f}초)")
 
+        final_ai_summary = _compose_ai_summary(topic_summary, chapter_summaries)
+        print(f"[TADAC] [chunked] 최종 ai_summary 길이: {len(final_ai_summary)}자 | chapter_summaries 수: {len(chapter_summaries)}개")
+        print(f"[TADAC] [chunked] ai_summary 미리보기: {final_ai_summary[:200]}...")
+
         yield {
             "type":       "complete",
-            "ai_summary": _compose_ai_summary(topic_summary, chapter_summaries),
+            "ai_summary": final_ai_summary,
             "stats": {
                 "transcript_source": transcript_source,
                 "total_words":       len(all_words),
